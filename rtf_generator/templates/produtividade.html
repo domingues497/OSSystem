@@ -50,12 +50,18 @@
                 
                 const response = await fetch(url);
                 const data = await response.json();
-                if (!Array.isArray(data) || data.length === 0) {
+                if (!Array.isArray(data)) {
+                    const msg = (data && data.error) ? data.error : 'Resposta inválida da API.';
+                    content.innerHTML = `<div class="no-data" style="color: red;">Erro ao carregar dados: ${msg}</div>`;
+                    return;
+                }
+                if (data.length === 0) {
                     content.innerHTML = '<div class="no-data">Nenhuma movimentação encontrada no período selecionado.</div>';
                     return;
                 }
                 content.innerHTML = data.map(day => {
-                    const linhas = day.tecnicos.map(t => `
+                    const tecnicos = Array.isArray(day.tecnicos) ? day.tecnicos : [];
+                    const linhas = tecnicos.map(t => `
                         <tr>
                             <td>${t.tecnico}</td>
                             <td class="td-num td-muted">${t.enviados}</td>
@@ -65,11 +71,11 @@
                             <td class="td-num td-total"><strong>${t.total}</strong></td>
                         </tr>
                     `).join('');
-                    const totalEnviados = day.tecnicos.reduce((a,b)=>a+(b.enviados||0),0);
-                    const totalAnd = day.tecnicos.reduce((a,b)=>a+b.andamento,0);
-                    const totalFin = day.tecnicos.reduce((a,b)=>a+b.finalizados,0);
-                    const totalEnc = day.tecnicos.reduce((a,b)=>a+(b.encerrados||0),0);
-                    const totalGeral = day.tecnicos.reduce((a,b)=>a+b.total,0);
+                    const totalEnviados = tecnicos.reduce((a,b)=>a+(b.enviados||0),0);
+                    const totalAnd = tecnicos.reduce((a,b)=>a+(b.andamento||0),0);
+                    const totalFin = tecnicos.reduce((a,b)=>a+(b.finalizados||0),0);
+                    const totalEnc = tecnicos.reduce((a,b)=>a+(b.encerrados||0),0);
+                    const totalGeral = tecnicos.reduce((a,b)=>a+(b.total||0),0);
                     return `
                         <div class="day-section">
                             <div class="day-header">

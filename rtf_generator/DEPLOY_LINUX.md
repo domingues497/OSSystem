@@ -35,7 +35,7 @@ Se for usar PostgreSQL remoto, não precisa instalar servidor Postgres, mas pode
 sudo mkdir -p /opt/rtf_generator
 sudo chown -R $USER:$USER /opt/rtf_generator
 cd /opt/rtf_generator
-git clone <URL_DO_REPO> .
+git clone https://github.com/domingues497/OSSystem.git .
 cd rtf_generator
 python3 -m venv venv
 ./venv/bin/pip install -U pip
