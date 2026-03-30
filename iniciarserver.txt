@@ -1,0 +1,7 @@
+.\venv\Scripts\python.exe app.py
+
+.\venv\Scripts\python.exe manage.py runserver 8000
+
+- Front-end / Dashboard (Flask): http://127.0.0.1:5000
+
+- Backend Principal (Django): http://127.0.0.1:8000

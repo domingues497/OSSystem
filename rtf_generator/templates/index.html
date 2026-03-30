@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Chamados</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="dashboard-header" style="margin-bottom: 1.5rem; border-bottom: 1px solid #eee; padding-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <h1 style="margin: 0; font-size: 1.5rem; color: #1a73e8;">Dashboard</h1>
+                <div style="display: flex; gap: 8px;">
+                    <a href="/chamados" class="btn-icon" title="Filtrar Chamados" style="background: #1a73e8; color: white; border: none; width: 32px; height: 32px; border-radius: 6px;">
+                        <i class="fas fa-search"></i>
+                    </a>
+                    <a href="/produtividade" class="btn-icon" title="Produtividade Equipe" style="background: #34a853; color: white; border: none; width: 32px; height: 32px; border-radius: 6px;">
+                        <i class="fas fa-users-cog"></i>
+                    </a>
+                </div>
+            </div>
+
+            <div class="filter-bar" style="margin: 0; padding: 5px 12px; background: #f8faff; border-radius: 10px; border: 1px solid #e1e8f5; display: flex; align-items: center; gap: 10px;">
+                <div class="refresh-group" style="border-right: 1px solid #ddd; padding-right: 10px; margin-right: 5px; display: flex; align-items: center; gap: 5px;">
+                    <button id="toggle-sound" onclick="toggleSound()" class="btn-icon" title="Ativar/Desativar Som" style="width: 28px; height: 28px; border: 1px solid #ddd; border-radius: 4px;">
+                        <i class="fas fa-volume-up"></i>
+                    </button>
+                </div>
+                <div class="refresh-group" style="border-right: 1px solid #ddd; padding-right: 10px; margin-right: 5px; display: flex; align-items: center; gap: 5px;">
+                    <i class="fas fa-sync-alt" style="font-size: 0.8rem; color: #666;"></i>
+                    <select id="refresh-interval" onchange="setupAutoRefresh()" style="border: none; background: transparent; font-size: 0.8rem; font-weight: 600; color: #444; cursor: pointer;">
+                        <option value="0">Off</option>
+                        <option value="30">30s</option>
+                        <option value="60" selected>1m</option>
+                        <option value="300">5m</option>
+                        <option value="600">10m</option>
+                    </select>
+                </div>
+                <div class="date-group" style="display: flex; align-items: center; gap: 5px;">
+                    <input type="date" id="dash-start-date" style="border: 1px solid #ddd; border-radius: 4px; padding: 3px 6px; font-size: 0.8rem; color: #444;">
+                    <span style="font-size: 0.8rem; color: #999;">-</span>
+                    <input type="date" id="dash-end-date" style="border: 1px solid #ddd; border-radius: 4px; padding: 3px 6px; font-size: 0.8rem; color: #444;">
+                    <button onclick="carregarDashboard()" class="btn btn-filter" style="padding: 4px 12px; font-size: 0.8rem; background: #1a73e8; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">OK</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Dashboard de Estatísticas -->
+        <div class="section" style="border: none; padding: 0; margin-bottom: 1.5rem;">
+            
+            <div class="kpi-container">
+                <div class="kpi-card" onclick="abrirFiltroKPI('abertos_hoje')" style="cursor: pointer;">
+                    <span class="kpi-value" id="kpi-abertos-hoje">0</span>
+                    <span class="kpi-label">Abertos Hoje</span>
+                </div>
+                <div class="kpi-card" onclick="abrirFiltroKPI('enviado_aprovacao_hoje')" style="cursor: pointer;">
+                    <span class="kpi-value" id="kpi-enviado-aprovacao-hoje" style="color: #f29900;">0</span>
+                    <span class="kpi-label">Enviado Aprovação Hoje</span>
+                </div>
+                <div class="kpi-card" onclick="abrirFiltroKPI('aprovados_hoje')" style="cursor: pointer;">
+                    <span class="kpi-value" id="kpi-aprovados-hoje" style="color: #34a853;">0</span>
+                    <span class="kpi-label">Aprovados Hoje</span>
+                </div>
+                <div class="kpi-card" onclick="abrirFiltroKPI('andamento_hoje')" style="cursor: pointer;">
+                    <span class="kpi-value" id="kpi-andamento-hoje" style="color: #1a73e8;">0</span>
+                    <span class="kpi-label">Em Andamento Hoje</span>
+                </div>
+                <div class="kpi-card" onclick="abrirFiltroKPI('finalizados_hoje')" style="cursor: pointer;">
+                    <span class="kpi-value" id="kpi-finalizados-hoje" style="color: #a142f4;">0</span>
+                    <span class="kpi-label">Finalizados Hoje</span>
+                </div>
+                <div class="kpi-card" onclick="abrirFiltroKPI('baixados_hoje')" style="cursor: pointer;">
+                    <span class="kpi-value" id="kpi-baixados-hoje" style="color: #5f6368;">0</span>
+                    <span class="kpi-label">Encerrados Hoje</span>
+                </div>
+            </div>
+
+            <!-- Chamados Pendentes (SLA 30min) -->
+            <div id="pending-section" class="pending-section" style="display: none;">
+                <h3 style="font-size: 1rem; color: #d32f2f; margin: 0; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-clock"></i> Chamados Aguardando 1º Atendimento (SLA 30min)
+                </h3>
+                <div id="pending-grid" class="pending-grid">
+                    <!-- Cards via JS -->
+                </div>
+            </div>
+
+            <div class="dashboard-grid">
+                <!-- Gráfico de Linha (Evolução) e Gráfico de Rosca Dupla -->
+                <div class="chart-box dashboard-charts" style="grid-column: span 2;">
+                    <div class="charts-inner-grid" style="grid-template-columns: 65% 35%;">
+                        <div class="chart-item evolution-chart">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <h3 style="font-size: 0.95rem; color: #555; margin: 0;">Evolução de Chamados</h3>
+                                <div id="period-totals" style="display: flex; gap: 15px; font-size: 0.8rem; font-weight: 600;">
+                                    <span style="color: #1a73e8; background: #e8f0fe; padding: 2px 8px; border-radius: 4px;">
+                                        Abertos: <span id="total-abertos-periodo">0</span>
+                                    </span>
+                                    <span style="color: #a142f4; background: #f3e5f5; padding: 2px 8px; border-radius: 4px;">
+                                        Finalizados: <span id="total-finalizados-periodo">0</span>
+                                    </span>
+                                    <span style="color: #34a853; background: #e6f4ea; padding: 2px 8px; border-radius: 4px;">
+                                        Encerrados: <span id="total-encerrados-periodo">0</span>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="chart-container" style="height: 300px; width: 100%;">
+                                <canvas id="historyChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-item distribution-unified-chart">
+                            <h3 style="font-size: 0.95rem; color: #555; margin-bottom: 15px; text-align: center;">Distribuição & Tipos</h3>
+                            <div style="display: flex; flex-direction: column; align-items: center; gap: 15px;">
+                                <div class="chart-container" style="height: 160px; width: 160px; position: relative;">
+                                    <canvas id="doubleDoughnutChart"></canvas>
+                                </div>
+                                <div style="width: 100%; max-height: 120px; overflow-y: auto; padding-right: 5px;">
+                                    <div style="margin-bottom: 8px;">
+                                        <span style="font-size: 0.65rem; font-weight: bold; color: #666; margin-bottom: 2px; display: block; border-left: 3px solid #1a73e8; padding-left: 5px;">STATUS (EXTERNO)</span>
+                                        <ul id="stats-legend" class="stats-legend"></ul>
+                                    </div>
+                                    <div>
+                                        <span style="font-size: 0.65rem; font-weight: bold; color: #666; margin-bottom: 2px; display: block; border-left: 3px solid #fbbc04; padding-left: 5px;">TIPO (INTERNO)</span>
+                                        <ul id="type-legend" class="stats-legend"></ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabela oculta para suportar o toggleDetails que os cards usam -->
+        <table style="display:none;"><tbody id="details-anchor"></tbody></table>
+
+
+    </div>
+
+    <!-- Modal de Detalhes -->
+    <div id="details-modal" class="modal-overlay">
+        <div class="modal-container">
+            <button onclick="closeDetails()" class="modal-close">&times;</button>
+            <div id="modal-content"></div>
+        </div>
+    </div>
+
+    <!-- Áudio de Notificação -->
+    <audio id="notification-sound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto"></audio>
+
+    <script>
+        let doubleDoughnutChart = null;
+        let historyChart = null;
+        let avgTimeChart = null;
+        let refreshTimer = null;
+        let pendingTickets = [];
+        let lastOpenCount = null;
+        
+        // Carregar configurações do localStorage
+        let soundEnabled = localStorage.getItem('dash-sound-enabled') === 'true';
+
+        function applyInitialSettings() {
+            // Aplicar intervalo de atualização
+            const savedInterval = localStorage.getItem('dash-refresh-interval') || "60";
+            const select = document.getElementById('refresh-interval');
+            if (select) {
+                select.value = savedInterval;
+                setupAutoRefresh();
+            }
+
+            // Aplicar estado inicial do som
+            const btnSound = document.getElementById('toggle-sound');
+            if (btnSound) {
+                btnSound.classList.toggle('active', soundEnabled);
+                btnSound.innerHTML = soundEnabled ? '<i class="fas fa-volume-up"></i>' : '<i class="fas fa-volume-mute"></i>';
+            }
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            localStorage.setItem('dash-sound-enabled', soundEnabled);
+            const btn = document.getElementById('toggle-sound');
+            btn.classList.toggle('active', soundEnabled);
+            btn.innerHTML = soundEnabled ? '<i class="fas fa-volume-up"></i>' : '<i class="fas fa-volume-mute"></i>';
+            
+            // Tocar uma vez para "pedir permissão" ao navegador
+            if (soundEnabled) {
+                const audio = document.getElementById('notification-sound');
+                audio.play().catch(e => console.log("Aguardando interação para som"));
+            }
+        }
+
+                const statusColors = {
+                    'Aberta': '#c1f7c1',
+                    'Aguardando': '#b1c18a',
+                    'Andamento': '#c1e7ff',
+                    'Avaliação': '#fdfd96', 
+                    'RT': '#ffb347',
+                    'BA': '#d3d3d3', 'RJ': '#cccccc'
+                };
+
+                const shortLabels = {
+                    'Aberta': 'AB.',
+                    'Aguardando': 'AG.',
+                    'Andamento': 'AN.',
+                    'Avaliação': 'AV.',
+                    'Incidente': 'INC.',
+                    'Requisição': 'REQ.',
+                    'BI': 'BI'
+                };
+
+                async function carregarDashboard() {
+                    try {
+                        const start = document.getElementById('dash-start-date').value;
+                        const end = document.getElementById('dash-end-date').value;
+                        let url = `/api/erp/estatisticas?start_date=${start}&end_date=${end}`;
+
+                        const response = await fetch(url);
+                        const data = await response.json();
+                        
+                        // Verificar novos chamados para o som
+                        const currentOpen = data.kpis.abertos_hoje;
+                        if (soundEnabled && lastOpenCount !== null && currentOpen > lastOpenCount) {
+                            document.getElementById('notification-sound').play().catch(e => console.error("Erro ao tocar som:", e));
+                        }
+                        lastOpenCount = currentOpen;
+
+                        document.getElementById('kpi-abertos-hoje').textContent = data.kpis.abertos_hoje;
+                        document.getElementById('kpi-enviado-aprovacao-hoje').textContent = data.kpis.enviado_aprovacao_hoje;
+                        document.getElementById('kpi-aprovados-hoje').textContent = data.kpis.aprovados_hoje;
+                        document.getElementById('kpi-andamento-hoje').textContent = data.kpis.andamento_hoje;
+                        document.getElementById('kpi-finalizados-hoje').textContent = data.kpis.finalizados_hoje;
+                        document.getElementById('kpi-baixados-hoje').textContent = data.kpis.baixados_hoje;
+
+                        const labels = []; const values = []; const colors = [];
+                        data.detalhes.forEach(stat => {
+                            const color = statusColors[stat.codigo] || '#eee';
+                            if (!stat.ignorar_percentual) {
+                                labels.push(stat.descricao); 
+                                values.push(stat.quantidade); 
+                                colors.push(color);
+                            }
+                        });
+                        
+                        const legend = document.getElementById('stats-legend');
+                        if (legend) {
+                            legend.innerHTML = data.detalhes
+                                .filter(stat => ['Aberta', 'Aguardando', 'Andamento', 'Avaliação'].includes(stat.codigo))
+                                .map(stat => {
+                                    const color = statusColors[stat.codigo] || '#eee';
+                                    const short = shortLabels[stat.descricao] || stat.descricao;
+                                    return `
+                                        <li class="legend-item" onclick="abrirFiltroKPI('${stat.codigo}')" title="${stat.descricao}">
+                                            <div class="color-dot" style="background-color: ${color}"></div>
+                                            <span class="label-full" style="flex-grow: 1; margin-right: 4px;">${stat.descricao}</span>
+                                            <span class="label-short" style="flex-grow: 1; margin-right: 4px;">${short}</span>
+                                            <span class="count-pill">${stat.quantidade}</span>
+                                            <span class="percent-label">${stat.percentual}%</span>
+                                        </li>`;
+                                }).join('');
+                        }
+                        
+                        // 1. Gráfico de Rosca Dupla (Status Externo, Tipo Interno)
+                        const doubleCtx = document.getElementById('doubleDoughnutChart');
+                        if (doubleCtx) {
+                            if (doubleDoughnutChart) doubleDoughnutChart.destroy();
+                            
+                            const statusLabels = []; const statusValues = []; const statusColorsList = [];
+                            data.detalhes.filter(s => ['Aberta', 'Aguardando', 'Andamento', 'Avaliação'].includes(s.codigo)).forEach(s => {
+                                statusLabels.push(s.descricao); statusValues.push(s.quantidade); statusColorsList.push(statusColors[s.codigo]);
+                            });
+
+                            const typeTotal = data.distribuicao_tipos.Incidente + data.distribuicao_tipos.Requisição + data.distribuicao_tipos.BI;
+                            const incPct = typeTotal > 0 ? Math.round((data.distribuicao_tipos.Incidente/typeTotal)*100) : 0;
+                            const reqPct = typeTotal > 0 ? Math.round((data.distribuicao_tipos.Requisição/typeTotal)*100) : 0;
+                            const biPct = typeTotal > 0 ? (100 - incPct - reqPct) : 0;
+
+                            doubleDoughnutChart = new Chart(doubleCtx, {
+                                type: 'doughnut',
+                                data: {
+                                    datasets: [
+                                        {
+                                            label: 'Distribuição Atual',
+                                            data: statusValues,
+                                            backgroundColor: statusColorsList,
+                                            weight: 1
+                                        },
+                                        {
+                                            label: 'Tipo de Chamado',
+                                            data: [data.distribuicao_tipos.Incidente, data.distribuicao_tipos.Requisição, data.distribuicao_tipos.BI],
+                                            backgroundColor: ['#ea4335', '#4285f4', '#fbbc04'],
+                                            weight: 0.8
+                                        }
+                                    ]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    plugins: { legend: { display: false } },
+                                    cutout: '40%',
+                                    onClick: (e, activeEls) => {
+                                        if (activeEls.length > 0) {
+                                            const idx = activeEls[0].index;
+                                            const datasetIdx = activeEls[0].datasetIndex;
+                                            if (datasetIdx === 0) {
+                                                const filteredStats = data.detalhes.filter(s => ['Aberta', 'Aguardando', 'Andamento', 'Avaliação'].includes(s.codigo));
+                                                if (filteredStats[idx]) abrirFiltroKPI(filteredStats[idx].codigo);
+                                            } else {
+                                                const tipos = ['Incidente', 'Requisição', 'BI'];
+                                                abrirFiltroTipo(tipos[idx]);
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+
+                            const typeLegend = document.getElementById('type-legend');
+                            if (typeLegend) {
+                                typeLegend.classList.add('type-legend-grid');
+                                typeLegend.innerHTML = `
+                                    <li class="legend-item" onclick="abrirFiltroTipo('Incidente')" title="Incidente">
+                                        <div class="color-dot" style="background-color: #ea4335"></div>
+                                        <span class="label-full" style="flex-grow: 1; margin-right: 4px;">Incidente</span>
+                                        <span class="label-short" style="flex-grow: 1; margin-right: 4px;">Inc.</span>
+                                        <span class="count-pill">${data.distribuicao_tipos.Incidente}</span>
+                                        <span class="percent-label">${incPct}%</span>
+                                    </li>
+                                    <li class="legend-item" onclick="abrirFiltroTipo('Requisição')" title="Requisição">
+                                        <div class="color-dot" style="background-color: #4285f4"></div>
+                                        <span class="label-full" style="flex-grow: 1; margin-right: 4px;">Requisição</span>
+                                        <span class="label-short" style="flex-grow: 1; margin-right: 4px;">Req.</span>
+                                        <span class="count-pill">${data.distribuicao_tipos.Requisição}</span>
+                                        <span class="percent-label">${reqPct}%</span>
+                                    </li>
+                                    <li class="legend-item" onclick="abrirFiltroTipo('BI')" title="BI">
+                                        <div class="color-dot" style="background-color: #fbbc04"></div>
+                                        <span class="label-full" style="flex-grow: 1; margin-right: 4px;">BI</span>
+                                        <span class="label-short" style="flex-grow: 1; margin-right: 4px;">BI</span>
+                                        <span class="count-pill">${data.distribuicao_tipos.BI}</span>
+                                        <span class="percent-label">${biPct}%</span>
+                                    </li>
+                                `;
+                            }
+                        }
+
+                renderHistoryChart(data.historico);
+                await carregarPendentes();
+            } catch (e) { 
+                console.error('Erro dashboard', e); 
+            }
+        }
+
+        async function carregarPendentes() {
+            const res = await fetch('/api/erp/chamados_pendentes');
+            pendingTickets = await res.json();
+            renderGrid('pending-section', 'pending-grid', pendingTickets, true);
+        }
+
+        function renderGrid(sectionId, gridId, tickets, withSLA = false, badge = '') {
+            const section = document.getElementById(sectionId);
+            const grid = document.getElementById(gridId);
+            if (tickets.length === 0) { section.style.display = 'none'; return; }
+            section.style.display = 'block';
+            grid.innerHTML = tickets.map(t => {
+                const sla = withSLA ? calculateSLA(t.data_cad_iso, t.hora_cad_fmt) : null;
+                return `
+                    <div class="pending-card ${sla?.isOverdue ? 'overdue' : ''}" onclick="openDetails('${t.cod_solicitacao}')" style="cursor:pointer;">
+                        <div style="display:flex; justify-content:space-between; align-items:start;">
+                            <strong style="font-size: 0.9rem;">#${t.cod_solicitacao} ${t.has_local_note ? '📝' : ''}</strong>
+                            <span class="status-badge" style="font-size:0.65rem;">${badge || t.cod_status_doc || '...'}</span>
+                        </div>
+                        <div style="font-size: 0.85rem; margin-top:5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${t.titulo_solicitacao}</div>
+                        ${withSLA ? `<span class="sla-timer" data-id="${t.cod_solicitacao}">${sla.timerText}</span>` : ''}
+                        <div class="pending-meta">👤 ${t.solicitante}<br>📅 ${t.data_cad_iso} ${t.hora_cad_fmt}</div>
+                    </div>`;
+            }).join('');
+        }
+
+        async function openDetails(id) {
+            const modal = document.getElementById('details-modal');
+            const content = document.getElementById('modal-content');
+            modal.style.display = 'flex';
+            content.innerHTML = '<div class="loading">Carregando detalhes...</div>';
+            
+            try {
+                const res = await fetch(`/api/erp/chamado/${id}`);
+                const data = await res.json();
+                content.innerHTML = `
+                    <h2 style="margin-top:0;">Chamado #${id}</h2>
+                    <div class="flow-container">
+                        ${['Abertura','1º Atend.','Autoriz. Gerência','Aprovado','Finaliz.','Encerr.'].map((l,i) => {
+                            const stepKeys = ['abertura','primeiro_atendimento','autorizacao_gerencia','aprovado_andamento','finalizacao','encerramento'];
+                            const step = stepKeys[i];
+                            const s = data.fluxo_etapas[step];
+                            const duration = s.duracao_proxima ? `<div class="step-duration">${s.duracao_proxima}</div>` : '';
+                            const statusClass = s.status === 'completed' ? 'active' : (s.status === 'skipped' ? 'skipped' : '');
+                            
+                            return `<div class="flow-step ${statusClass}">
+                                <div class="step-icon">${i+1}</div>
+                                <span class="step-label">${l}</span>
+                                <span class="step-date">${s.data || ''}</span>
+                                ${duration}
+                            </div>`;
+                        }).join('')}
+                    </div>
+                    <div class="details-grid">
+                        <div>
+                            <p><strong>Criador por:</strong> ${data.criador || 'N/A'}</p>
+                            <p><strong>Título:</strong> ${data.titulo_solicitacao}</p>
+                            <p><strong>Descrição:</strong><br><div class="description-text">${data.descr_solicitacao}</div></p>
+                            <p><strong>Ativo:</strong> ${data.descr_ativo || 'N/A'}</p>
+                        </div>
+                        <div>
+                            <div class="comment-section" style="max-height:300px; overflow-y:auto;">
+                                <strong>📜 Histórico ERP:</strong>
+                                ${data.comentarios_erp.map(c => `
+                                    <div class="comment-bubble ${c.destacar ? 'highlight' : ''}">
+                                        <div class="comment-meta"><span>👤 ${c.usuario}</span><span>📅 ${c.data}</span></div>
+                                        <div style="font-size:0.9rem;">${c.texto}</div>
+                                    </div>`).join('')}
+                            </div>
+                            <div class="local-notes-section">
+                                <strong>📝 Notas Locais:</strong>
+                                <div id="modal-notes-${id}">${data.anotacoes_locais.map(n => `<div class="local-note-bubble">${n.note}</div>`).join('')}</div>
+                                <textarea id="modal-note-text-${id}" class="note-textarea" placeholder="Nova nota..."></textarea>
+                                <button class="btn-small" onclick="salvarNotaModal('${id}')">Salvar</button>
+                            </div>
+                        </div>
+                    </div>`;
+            } catch(e) { content.innerHTML = 'Erro ao carregar.'; }
+        }
+
+        function closeDetails() { document.getElementById('details-modal').style.display = 'none'; }
+
+        async function salvarNotaModal(id) {
+            const txt = document.getElementById(`modal-note-text-${id}`).value;
+            if(!txt) return;
+            await fetch('/api/local/note', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({cod_solicitacao: id, note: txt})
+            });
+            closeDetails(); // Fecha o modal após salvar
+            carregarDashboard(); // Atualiza o dashboard para mostrar o ícone 📝
+        }
+
+        function calculateSLA(dataCad, horaCad) {
+            const now = new Date();
+            const openDate = new Date(`${dataCad}T${horaCad}`);
+            let deadline = new Date(openDate);
+            const startH = 7, startM = 30, endH = 18;
+            
+            if (deadline.getHours() < startH || (deadline.getHours() === startH && deadline.getMinutes() < startM)) deadline.setHours(startH, startM, 0);
+            if (deadline.getHours() >= endH) { deadline.setDate(deadline.getDate()+1); deadline.setHours(startH, startM, 0); }
+            deadline.setMinutes(deadline.getMinutes() + 30);
+            if (deadline.getHours() >= endH) { 
+                let diff = (deadline.getHours()*60+deadline.getMinutes()) - (endH*60);
+                deadline.setDate(deadline.getDate()+1); deadline.setHours(startH, startM + diff, 0);
+            }
+            
+            let diff = deadline - now;
+            let overdue = diff < 0;
+            let abs = Math.abs(diff);
+            let h = Math.floor(abs/3600000), m = Math.floor((abs%3600000)/60000), s = Math.floor((abs%60000)/1000);
+            return { timerText: `${overdue?'-':''}${h>0?h+'h ':''}${m}m ${s}s`, isOverdue: overdue };
+        }
+
+        setInterval(() => {
+            document.querySelectorAll('.sla-timer').forEach(el => {
+                const t = pendingTickets.find(x => x.cod_solicitacao == el.dataset.id);
+                if(t) {
+                    const sla = calculateSLA(t.data_cad_iso, t.hora_cad_fmt);
+                    el.textContent = sla.timerText;
+                    el.parentElement.classList.toggle('overdue', sla.isOverdue);
+                }
+            });
+        }, 1000);
+
+        function renderHistoryChart(hist) {
+            const ctx = document.getElementById('historyChart').getContext('2d');
+            if(historyChart) historyChart.destroy();
+
+            // Calcular totais do período
+             const totalAbertos = hist.reduce((a, b) => a + b.abertos, 0);
+             const totalFinalizados = hist.reduce((a, b) => a + (b.finalizados || 0), 0);
+             const totalEncerrados = hist.reduce((a, b) => a + b.encerrados, 0);
+ 
+             // Atualizar os elementos de texto
+             const elAbertos = document.getElementById('total-abertos-periodo');
+             const elFinalizados = document.getElementById('total-finalizados-periodo');
+             const elEncerrados = document.getElementById('total-encerrados-periodo');
+             
+             if (elAbertos) elAbertos.textContent = totalAbertos;
+             if (elFinalizados) elFinalizados.textContent = totalFinalizados;
+             if (elEncerrados) elEncerrados.textContent = totalEncerrados;
+
+            historyChart = new Chart(ctx, {
+                type:'line',
+                data: {
+                    labels: hist.map(h=>h.data),
+                    datasets: [
+                        {label:'Abertura', data:hist.map(h=>h.abertos), borderColor:'#1a73e8', fill:true, backgroundColor:'rgba(26,115,232,0.05)', tension:0.4},
+                        {label:'Finalizado', data:hist.map(h=>h.finalizados), borderColor:'#a142f4', fill:false, tension:0.4},
+                        {label:'Encerrado', data:hist.map(h=>h.encerrados), borderColor:'#5f6368', fill:true, backgroundColor:'rgba(95,99,104,0.05)', tension:0.4}
+                    ]
+                },
+                options: { 
+                    responsive:true, 
+                    maintainAspectRatio:false, 
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom',
+                            labels: {
+                                boxWidth: 12,
+                                padding: 15,
+                                font: {
+                                    size: 11
+                                }
+                            }
+                        }
+                    },
+                    scales:{y:{beginAtZero:true}} 
+                },
+                onClick: (e, activeEls) => {
+                    if (activeEls.length > 0) {
+                        const idx = activeEls[0].index;
+                        const datasetIdx = activeEls[0].datasetIndex;
+                        const day = hist[idx];
+                        const labels = ['abertos_hoje', 'finalizados_hoje', 'baixados_hoje'];
+                        const kpi = labels[datasetIdx];
+                        window.location.href = `/chamados?kpi=${kpi}&start_date=${day.iso}&end_date=${day.iso}`;
+                    }
+                }
+            });
+        }
+
+        function setupAutoRefresh() {
+            if(refreshTimer) clearInterval(refreshTimer);
+            const sec = parseInt(document.getElementById('refresh-interval').value);
+            localStorage.setItem('dash-refresh-interval', sec);
+            if(sec > 0) refreshTimer = setInterval(carregarDashboard, sec * 1000);
+        }
+
+        function abrirFiltroKPI(key) {
+            const kpis = ['abertos_hoje', 'enviado_aprovacao_hoje', 'aprovados_hoje', 'andamento_hoje', 'finalizados_hoje', 'baixados_hoje'];
+            const today = getLocalDateISO(new Date());
+            
+            if (kpis.includes(key)) {
+                // Se for um KPI de "Hoje", ignorar o filtro do dashboard e usar a data atual
+                window.location.href = `/chamados?kpi=${key}&start_date=${today}&end_date=${today}`;
+            } else {
+                // Se for um status da legenda (ex: IM, AA), usar o filtro de datas do dashboard
+                const start = document.getElementById('dash-start-date').value;
+                const end = document.getElementById('dash-end-date').value;
+                window.location.href = `/chamados?status=${key}&start_date=${start}&end_date=${end}`;
+            }
+        }
+
+        function abrirFiltroTipo(tipo) {
+            const start = document.getElementById('dash-start-date').value;
+            const end = document.getElementById('dash-end-date').value;
+            window.location.href = `/chamados?tipo=${encodeURIComponent(tipo)}&start_date=${start}&end_date=${end}`;
+        }
+
+        function getLocalDateISO(date) {
+            const offset = date.getTimezoneOffset();
+            const localDate = new Date(date.getTime() - (offset * 60 * 1000));
+            return localDate.toISOString().split('T')[0];
+        }
+
+        const hoje = new Date(); const sete = new Date(); sete.setDate(hoje.getDate()-6);
+        document.getElementById('dash-end-date').value = getLocalDateISO(hoje);
+        document.getElementById('dash-start-date').value = getLocalDateISO(sete);
+        applyInitialSettings();
+        carregarDashboard(); setupAutoRefresh();
+    </script>
+</body>
+</html>

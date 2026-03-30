@@ -1,0 +1,14 @@
+[Unit]
+Description=rtf_generator
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/rtf_generator/rtf_generator
+EnvironmentFile=/opt/rtf_generator/rtf_generator/.env
+ExecStart=/opt/rtf_generator/rtf_generator/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:8000 wsgi:app
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

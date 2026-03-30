@@ -1,0 +1,26 @@
+.day-section { margin-bottom: 30px; border: 1px solid #eee; border-radius: 12px; overflow: hidden; background: #fff; }
+.day-header { background: #f1f3f4; padding: 12px 20px; font-weight: bold; color: #444; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
+
+table { width: 100%; border-collapse: collapse; }
+th { background: #f8f9fa; text-align: left; padding: 12px 20px; font-size: 0.85rem; color: #666; text-transform: uppercase; border-bottom: 2px solid #eee; }
+td { padding: 12px 20px; border-bottom: 1px solid #f1f1f1; font-size: 0.9rem; }
+tr:hover { background: #f8faff; }
+tfoot th { background: #f8f9fa; border-top: 2px solid #eee; }
+
+.th-num, .td-num { text-align: right; font-variant-numeric: tabular-nums; }
+.th-total, .td-total { font-weight: 700; }
+.th-muted { color: #999; }
+.td-muted { color: #999; }
+
+.th-andamento { color: #1a73e8; }
+.th-finalizados { color: #a142f4; }
+.th-enviados { color: #f29900; }
+.th-encerrados { color: #5f6368; }
+
+.status-badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: bold; background: #e8f0fe; color: #1a73e8; }
+.status-ba { background: #ceead6; color: #0d652d; }
+.user-tag { display: flex; align-items: center; gap: 8px; font-weight: 500; color: #333; }
+.user-tag i { color: #1a73e8; font-size: 0.8rem; }
+
+.loading { text-align: center; padding: 40px; color: #666; font-style: italic; }
+.no-data { text-align: center; padding: 40px; color: #999; }

@@ -1,0 +1,44 @@
+2026-03-11 16:48:54,707 INFO  [com.kugel.web.filters.ThreadRenameRequestFilter] (/PW00183/81056#1538#1#2035372793) ini-exec-rest
+2026-03-11 16:48:54,707 INFO  [com.kugel.domain.web.MensagensUsuario] (/PW00183/81056#1538#1#2035372793) Limpando mensagens
+2026-03-11 16:48:54,708 INFO  [com.kugel.web.filters.PermissaoMenuFilter] (/PW00183/81056#1538#1#2035372793) PermissaoMenuFilter.doFilter : PW00183 usuario 1538
+2026-03-11 16:48:54,713 INFO  [com.kugel.dao.ProgramasDAO] (/PW00183/81056#1538#1#2035372793) tempo-exec: 4ms
+2026-03-11 16:48:54,715 INFO  [com.kugel.web.filters.LogExecFilter] (/PW00183/81056#1538#1#2035372793) Setting log level: com.kugel -> ALL
+2026-03-11 16:48:54,715 INFO  [com.kugel.web.filters.LogExecFilter] (/PW00183/81056#1538#1#2035372793) Setting log level: org.hibernate.SQL -> ALL
+2026-03-11 16:48:54,715 INFO  [com.kugel.web.filters.LogExecFilter] (/PW00183/81056#1538#1#2035372793) Setting log level: org.hibernate.type.descriptor.sql.BasicBinder -> ALL
+2026-03-11 16:48:54,718 DEBUG [org.hibernate.SQL] (/PW00183/81056#1538#1#2035372793) select * from BANCO01.DM1744 where COD_SOLICITACAO = ?
+2026-03-11 16:48:54,718 TRACE [org.hibernate.type.descriptor.sql.BasicBinder] (/PW00183/81056#1538#1#2035372793) binding parameter [1] as [BIGINT] - [81056]
+2026-03-11 16:48:54,718 FINE  [org.hibernate.SQL] (/PW00183/81056#1538#1#2035372793) Resultado: 1 registro(s)
+2026-03-11 16:48:54,718 DEBUG [org.hibernate.SQL] (/PW00183/81056#1538#1#2035372793) select * from public.DS0300 where COD_USUARIO = ?
+2026-03-11 16:48:54,718 TRACE [org.hibernate.type.descriptor.sql.BasicBinder] (/PW00183/81056#1538#1#2035372793) binding parameter [1] as [INTEGER] - [785]
+2026-03-11 16:48:54,719 FINE  [org.hibernate.SQL] (/PW00183/81056#1538#1#2035372793) Resultado: 1 registro(s)
+2026-03-11 16:48:54,719 DEBUG [org.hibernate.SQL] (/PW00183/81056#1538#1#2035372793) select * from public.DS0300 where COD_USUARIO = ?
+2026-03-11 16:48:54,719 TRACE [org.hibernate.type.descriptor.sql.BasicBinder] (/PW00183/81056#1538#1#2035372793) binding parameter [1] as [INTEGER] - [785]
+2026-03-11 16:48:54,719 FINE  [org.hibernate.SQL] (/PW00183/81056#1538#1#2035372793) Resultado: 1 registro(s)
+2026-03-11 16:48:54,719 DEBUG [org.hibernate.SQL] (/PW00183/81056#1538#1#2035372793) select * from BANCO01.DC1629 where COD_ATIVO = ?
+2026-03-11 16:48:54,719 TRACE [org.hibernate.type.descriptor.sql.BasicBinder] (/PW00183/81056#1538#1#2035372793) binding parameter [1] as [BIGINT] - [1393]
+2026-03-11 16:48:54,720 FINE  [org.hibernate.SQL] (/PW00183/81056#1538#1#2035372793) Resultado: 1 registro(s)
+2026-03-11 16:48:54,720 DEBUG [org.hibernate.SQL] (/PW00183/81056#1538#1#2035372793) select * from BANCO01.DC1740 where COD_NATUREZA_SERVICO = ?
+2026-03-11 16:48:54,720 TRACE [org.hibernate.type.descriptor.sql.BasicBinder] (/PW00183/81056#1538#1#2035372793) binding parameter [1] as [INTEGER] - [8]
+2026-03-11 16:48:54,721 FINE  [org.hibernate.SQL] (/PW00183/81056#1538#1#2035372793) Resultado: 1 registro(s)
+2026-03-11 16:48:54,721 DEBUG [org.hibernate.SQL] (/PW00183/81056#1538#1#2035372793) select * from public.DS0300 where COD_USUARIO = ?
+2026-03-11 16:48:54,721 TRACE [org.hibernate.type.descriptor.sql.BasicBinder] (/PW00183/81056#1538#1#2035372793) binding parameter [1] as [INTEGER] - [0]
+2026-03-11 16:48:54,721 FINE  [org.hibernate.SQL] (/PW00183/81056#1538#1#2035372793) Resultado: 0 registro(s)
+2026-03-11 16:48:54,721 DEBUG [org.hibernate.SQL] (/PW00183/81056#1538#1#2035372793) select * from BANCO01.DM1745 where COD_SOLICITACAO = ? and COD_USUARIO > 0 and DATA_GRAV > 0 and HORA_GRAV > 0
+2026-03-11 16:48:54,721 TRACE [org.hibernate.type.descriptor.sql.BasicBinder] (/PW00183/81056#1538#1#2035372793) binding parameter [1] as [BIGINT] - [81056]
+2026-03-11 16:48:54,722 FINE  [org.hibernate.SQL] (/PW00183/81056#1538#1#2035372793) Resultado: 1 registro(s)
+2026-03-11 16:48:54,722 DEBUG [org.hibernate.SQL] (/PW00183/81056#1538#1#2035372793) select * from public.DS0300 where COD_USUARIO = ?
+2026-03-11 16:48:54,722 TRACE [org.hibernate.type.descriptor.sql.BasicBinder] (/PW00183/81056#1538#1#2035372793) binding parameter [1] as [INTEGER] - [1421]
+2026-03-11 16:48:54,722 FINE  [org.hibernate.SQL] (/PW00183/81056#1538#1#2035372793) Resultado: 1 registro(s)
+2026-03-11 16:48:54,722 DEBUG [org.hibernate.SQL] (/PW00183/81056#1538#1#2035372793) select * from public.DS0300 where COD_USUARIO = ?
+2026-03-11 16:48:54,722 TRACE [org.hibernate.type.descriptor.sql.BasicBinder] (/PW00183/81056#1538#1#2035372793) binding parameter [1] as [INTEGER] - [785]
+2026-03-11 16:48:54,722 FINE  [org.hibernate.SQL] (/PW00183/81056#1538#1#2035372793) Resultado: 1 registro(s)
+2026-03-11 16:48:54,723 DEBUG [org.hibernate.SQL] (/PW00183/81056#1538#1#2035372793) select * from BANCO01.DM1759 where COD_SOLICITACAO = ?
+2026-03-11 16:48:54,723 TRACE [org.hibernate.type.descriptor.sql.BasicBinder] (/PW00183/81056#1538#1#2035372793) binding parameter [1] as [BIGINT] - [81056]
+2026-03-11 16:48:54,723 FINE  [org.hibernate.SQL] (/PW00183/81056#1538#1#2035372793) Resultado: 0 registro(s)
+2026-03-11 16:48:54,723 DEBUG [org.hibernate.SQL] (/PW00183/81056#1538#1#2035372793) select * from BANCO01.DM1874 where COD_SOLICITACAO = ? order by ID_HIST_PESQ_SATISF desc 
+2026-03-11 16:48:54,723 TRACE [org.hibernate.type.descriptor.sql.BasicBinder] (/PW00183/81056#1538#1#2035372793) binding parameter [1] as [BIGINT] - [81056]
+2026-03-11 16:48:54,724 FINE  [org.hibernate.SQL] (/PW00183/81056#1538#1#2035372793) Resultado: 0 registro(s)
+2026-03-11 16:48:54,724 DEBUG [org.hibernate.SQL] (/PW00183/81056#1538#1#2035372793) select *  from BANCO01.DM2113 where COD_SOLICITACAO = ?
+2026-03-11 16:48:54,724 TRACE [org.hibernate.type.descriptor.sql.BasicBinder] (/PW00183/81056#1538#1#2035372793) binding parameter [1] as [BIGINT] - [81056]
+2026-03-11 16:48:54,725 FINE  [org.hibernate.SQL] (/PW00183/81056#1538#1#2035372793) Resultado: 0 registro(s)
+2026-03-11 16:48:54,726 INFO  [com.kugel.domain.web.MensagensUsuario] (/PW00183/81056#1538#1#2035372793) Limpando mensagens
