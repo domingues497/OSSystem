@@ -17,6 +17,9 @@ venv/
 *.sqlite
 *.sqlite3
 
+/C001/
+
+rtf_generator/uploads/
 rtf_generator/generated/
 
 .tmp_doc/
