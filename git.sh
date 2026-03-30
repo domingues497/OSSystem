@@ -18,3 +18,4 @@ fi
 
 $SUDO systemctl restart rtf_generator
 $SUDO systemctl status rtf_generator --no-pager
+#teste
