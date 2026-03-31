@@ -934,25 +934,22 @@ class ERPRepository:
                     WHERE I.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
                       AND I.COD_USUARIO > 0
                 ) AS NO_ITERATION,
-                EXISTS (
-                    SELECT 1
-                    FROM BANCO01.DM1745 W
-                    WHERE W.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
-                      AND UPPER(W.{text_col}) LIKE '%%SOLICIT%%'
-                      AND UPPER(W.{text_col}) LIKE '%%AUTORIZA%%'
-                ) AS WAITING_AUTH,
-                EXISTS (
-                    SELECT 1
-                    FROM BANCO01.DM1745 A
-                    WHERE A.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
-                      AND (
-                            (UPPER(A.{text_col}) LIKE '%%AUTORIZA%%' AND UPPER(A.{text_col}) LIKE '%%APROVAD%%')
-                            OR UPPER(A.{text_col}) LIKE '%%SOLICITAÇÃO APROVADA%%'
-                            OR UPPER(A.{text_col}) LIKE '%%SOLICITACAO APROVADA%%'
-                      )
-                ) AS AUTH_APPROVED
+                (COALESCE(AUTH.req_count, 0) > COALESCE(AUTH.appr_count, 0)) AS WAITING_AUTH,
+                (COALESCE(AUTH.appr_count, 0) > 0) AS AUTH_APPROVED
             FROM BANCO01.DM1744
             LEFT JOIN public.DS0300 ON (DS0300.COD_USUARIO = DM1744.COD_USUARIO)
+            LEFT JOIN LATERAL (
+                SELECT
+                    SUM(CASE WHEN (
+                        (UPPER(X.{text_col}) LIKE '%%SOLICIT%%' AND UPPER(X.{text_col}) LIKE '%%AUTORIZA%%' AND UPPER(X.{text_col}) LIKE '%%FOI ENVIAD%%')
+                        OR UPPER(X.{text_col}) LIKE '%%SOLICITOU A AUTORIZA%%'
+                    ) THEN 1 ELSE 0 END) AS req_count,
+                    SUM(CASE WHEN (
+                        (UPPER(X.{text_col}) LIKE '%%AUTORIZA%%' AND UPPER(X.{text_col}) LIKE '%%APROVAD%%')
+                    ) THEN 1 ELSE 0 END) AS appr_count
+                FROM BANCO01.DM1745 X
+                WHERE X.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
+            ) AUTH ON TRUE
             WHERE DM1744.COD_ASSUNTO IN (SELECT COD_ASSUNTO FROM BANCO01.DC1966 WHERE COD_DEPAR = 16)
         """
 

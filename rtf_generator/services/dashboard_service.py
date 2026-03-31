@@ -224,8 +224,6 @@ class DashboardService:
                 "auth_approved": bool(r["auth_approved"]),
                 "has_note": tid in ids_with_notes
             }
-            if item["auth_approved"]:
-                item["waiting_auth"] = False
             kanban[col_name].append(item)
 
         return kanban

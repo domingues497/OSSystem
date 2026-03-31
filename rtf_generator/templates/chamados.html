@@ -374,8 +374,8 @@
                 const organizer = document.getElementById('organizer-aguardando');
                 const counts = { waiting: 0, approved: 0 };
                 tickets.forEach(t => {
-                    if (t.auth_approved) counts.approved += 1;
-                    else if (t.waiting_auth) counts.waiting += 1;
+                    if (t.waiting_auth) counts.waiting += 1;
+                    else if (t.auth_approved) counts.approved += 1;
                 });
                 if (organizer) {
                     const chip = (label, color, count) => `
@@ -396,7 +396,7 @@
                 let cardClass = 'kanban-card';
                 if (t.no_iteration) cardClass += ' no-iteration';
                 if (t.waiting_auth) cardClass += ' waiting-auth';
-                if (t.auth_approved) cardClass += ' auth-approved';
+                else if (t.auth_approved) cardClass += ' auth-approved';
                 
                 let typeColor = '#1565c0';
                 let typeBg = '#e3f2fd';
