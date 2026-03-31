@@ -2,6 +2,7 @@ from flask import Flask
 from config import Config
 from routes.erp_routes import erp_bp
 from routes.local_routes import local_bp
+from routes.notify_routes import notify_bp
 from routes.web_routes import web_bp
 from database.local_connection import init_local_db
 import os
@@ -26,6 +27,7 @@ def create_app():
     app.register_blueprint(web_bp)
     app.register_blueprint(erp_bp, url_prefix='/api/erp')
     app.register_blueprint(local_bp, url_prefix='/api/local')
+    app.register_blueprint(notify_bp, url_prefix='/api/notify')
 
     return app
 

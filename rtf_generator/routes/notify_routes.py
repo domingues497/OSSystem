@@ -1,0 +1,122 @@
+from flask import Blueprint, jsonify, request
+import os
+from datetime import datetime
+
+from repositories.erp_repository import ERPRepository
+from repositories.local_alert_repository import LocalAlertRepository
+from services.telegram_service import TelegramService
+from config import Config
+
+notify_bp = Blueprint('notify', __name__)
+
+@notify_bp.route('/pending', methods=['POST'])
+def notify_pending_first_attendance():
+    try:
+        tg_targets = [t.strip() for t in (os.getenv("TELEGRAM_CHAT_IDS", "") or "").split(",") if t.strip()]
+        has_tg = bool(os.getenv("TELEGRAM_BOT_TOKEN")) and bool(tg_targets)
+        if not has_tg:
+            return jsonify({"error": "Configure TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_IDS"}), 400
+        try:
+            sla_minutes = int(request.args.get('sla_minutes', '30'))
+        except Exception:
+            sla_minutes = 30
+        try:
+            pre_minutes = int(request.args.get('pre_minutes', '10'))
+        except Exception:
+            pre_minutes = 10
+        try:
+            open_window_minutes = int(request.args.get('open_window_minutes', '2'))
+        except Exception:
+            open_window_minutes = 2
+        dry_run = str(request.args.get('dry_run', '')).strip().lower() in {'1', 'true', 'yes'}
+        ignore_sent = str(request.args.get('ignore_sent', '')).strip().lower() in {'1', 'true', 'yes'}
+
+        erp = ERPRepository()
+        alerts = LocalAlertRepository(Config.LOCAL_DB)
+        tg = TelegramService()
+
+        pendentes = erp.buscar_chamados_pendentes_base()
+        sent_open = []
+        sent_pre = []
+        candidates_open = []
+        candidates_pre = []
+
+        for d in pendentes:
+            cod = int(d['cod_solicitacao'])
+            data_val = d.get('data_cad')
+            hora_val = d.get('hora_cad')
+            try:
+                hh = int(float(hora_val))
+                mm = int((float(hora_val) - hh) * 100)
+                ss = int((((float(hora_val) - hh) * 100) - mm) * 100)
+            except Exception:
+                hh, mm, ss = 0, 0, 0
+            s_date = str(int(data_val)).zfill(8)
+            dt_open = datetime.strptime(f"{s_date}{hh:02d}{mm:02d}{ss:02d}", "%Y%m%d%H%M%S")
+            diff_min = int((datetime.now() - dt_open).total_seconds() // 60)
+            remaining = sla_minutes - diff_min
+            should_open = diff_min >= 0 and diff_min <= open_window_minutes
+            should_pre = remaining > 0 and remaining <= pre_minutes
+            already_open = (not ignore_sent) and alerts.was_sent(cod, "sla_open")
+            already_pre = (not ignore_sent) and alerts.was_sent(cod, "sla_pre")
+            if should_open and already_open:
+                should_open = False
+            if should_pre and already_pre:
+                should_pre = False
+            if not should_open and not should_pre:
+                continue
+
+            item = {
+                "cod_solicitacao": cod,
+                "minutos": diff_min,
+                "faltam": remaining,
+                "solicitante": d.get('solicitante', ''),
+                "titulo": d.get('titulo_solicitacao', '')
+            }
+            if should_open:
+                candidates_open.append(item)
+            if should_pre:
+                candidates_pre.append(item)
+            if dry_run:
+                continue
+
+            data_iso = f"{s_date[0:4]}-{s_date[4:6]}-{s_date[6:8]}"
+            hora_fmt = f"{hh:02d}:{mm:02d}:{ss:02d}"
+            base_url = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
+            link = f"{base_url}/chamados?id={cod}" if base_url else ""
+
+            def send_msg(msg_text):
+                ok = False
+                for chat_id in tg_targets:
+                    if tg.send(chat_id, msg_text):
+                        ok = True
+                return ok
+
+            if should_open:
+                msg = f"Novo chamado #{cod} aguardando 1º atendimento\nSLA: {sla_minutes} min (faltam {max(0, remaining)} min)\nSolicitante: {d.get('solicitante','')}\nTítulo: {d.get('titulo_solicitacao','')}\nAbertura: {data_iso} {hora_fmt}"
+                if link:
+                    msg = msg + f"\n{link}"
+                if send_msg(msg):
+                    alerts.mark_sent(cod, "sla_open")
+                    sent_open.append(cod)
+
+            if should_pre:
+                msg = f"Alerta SLA: faltam {max(0, remaining)} min para o 1º atendimento\nChamado #{cod}\nSolicitante: {d.get('solicitante','')}\nTítulo: {d.get('titulo_solicitacao','')}\nAbertura: {data_iso} {hora_fmt}"
+                if link:
+                    msg = msg + f"\n{link}"
+                if send_msg(msg):
+                    alerts.mark_sent(cod, "sla_pre")
+                    sent_pre.append(cod)
+
+        if dry_run:
+            return jsonify({
+                "dry_run": True,
+                "sla_minutes": sla_minutes,
+                "pre_minutes": pre_minutes,
+                "open_window_minutes": open_window_minutes,
+                "candidates_open": candidates_open,
+                "candidates_pre": candidates_pre
+            })
+        return jsonify({"sent_open": sent_open, "sent_pre": sent_pre})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

@@ -453,7 +453,8 @@
                     </div>
                     <div class="details-grid">
                         <div>
-                            <p><strong>Criador por:</strong> ${data.criador || 'N/A'}</p>
+                            ${data.criador ? `<p><strong>Criador por:</strong> ${data.criador}</p>` : ``}
+                            <p><strong>Solicitante:</strong> ${data.solicitante || 'N/A'}</p>
                             <p><strong>Título:</strong> ${data.titulo_solicitacao}</p>
                             <p><strong>Descrição:</strong><br><div class="description-text">${data.descr_solicitacao}</div></p>
                             <p><strong>Ativo:</strong> ${data.descr_ativo || 'N/A'}</p>
