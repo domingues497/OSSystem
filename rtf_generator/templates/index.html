@@ -12,13 +12,10 @@
     <div class="container">
         <div class="dashboard-header" style="margin-bottom: 1.5rem; border-bottom: 1px solid #eee; padding-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
             <div style="display: flex; align-items: center; gap: 15px;">
-                <h1 style="margin: 0; font-size: 1.5rem; color: #1a73e8;">Dashboard</h1>
+                <h1 id="dashboard-title" style="margin: 0; font-size: 1.5rem; color: #1a73e8; cursor: pointer;">Dashboard</h1>
                 <div style="display: flex; gap: 8px;">
                     <a href="/chamados" class="btn-icon" title="Filtrar Chamados" style="background: #1a73e8; color: white; border: none; width: 32px; height: 32px; border-radius: 6px;">
                         <i class="fas fa-search"></i>
-                    </a>
-                    <a href="/produtividade" class="btn-icon" title="Produtividade Equipe" style="background: #34a853; color: white; border: none; width: 32px; height: 32px; border-radius: 6px;">
-                        <i class="fas fa-users-cog"></i>
                     </a>
                 </div>
             </div>
@@ -58,7 +55,7 @@
                 </div>
                 <div class="kpi-card" onclick="abrirFiltroKPI('enviado_aprovacao_hoje')" style="cursor: pointer;">
                     <span class="kpi-value" id="kpi-enviado-aprovacao-hoje" style="color: #f29900;">0</span>
-                    <span class="kpi-label">Enviado Aprovação HojeTeste</span>
+                    <span class="kpi-label">Enviado Aprovação Hoje</span>
                 </div>
                 <div class="kpi-card" onclick="abrirFiltroKPI('aprovados_hoje')" style="cursor: pointer;">
                     <span class="kpi-value" id="kpi-aprovados-hoje" style="color: #34a853;">0</span>
@@ -571,12 +568,46 @@
             const localDate = new Date(date.getTime() - (offset * 60 * 1000));
             return localDate.toISOString().split('T')[0];
         }
+        
+        function scheduleDateRollover() {
+            const now = new Date();
+            const nextMidnight = new Date(now);
+            nextMidnight.setHours(24, 0, 0, 0);
+            const delay = nextMidnight.getTime() - now.getTime();
+            setTimeout(() => {
+                const hoje = new Date();
+                const sete = new Date(); sete.setDate(hoje.getDate() - 6);
+                const endInput = document.getElementById('dash-end-date');
+                const startInput = document.getElementById('dash-start-date');
+                if (endInput) endInput.value = getLocalDateISO(hoje);
+                if (startInput) startInput.value = getLocalDateISO(sete);
+                carregarDashboard();
+                scheduleDateRollover();
+            }, Math.max(1000, delay));
+        }
+        
+        function setupHiddenProdutividadeShortcut() {
+            const el = document.getElementById('dashboard-title');
+            if (!el) return;
+            let clicks = 0;
+            let last = 0;
+            el.addEventListener('click', () => {
+                const now = Date.now();
+                if (now - last > 1200) clicks = 0;
+                last = now;
+                clicks += 1;
+                if (clicks >= 5) {
+                    clicks = 0;
+                    window.location.href = '/produtividade';
+                }
+            });
+        }
 
         const hoje = new Date(); const sete = new Date(); sete.setDate(hoje.getDate()-6);
         document.getElementById('dash-end-date').value = getLocalDateISO(hoje);
         document.getElementById('dash-start-date').value = getLocalDateISO(sete);
         applyInitialSettings();
-        carregarDashboard(); setupAutoRefresh();
+        carregarDashboard(); setupAutoRefresh(); scheduleDateRollover(); setupHiddenProdutividadeShortcut();
     </script>
 </body>
 </html>

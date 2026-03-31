@@ -113,6 +113,21 @@
                 content.innerHTML = `<div class="no-data" style="color: red;">Erro ao carregar dados: ${e.message}</div>`;
             }
         }
+        
+        function scheduleDateRollover() {
+            const now = new Date();
+            const nextMidnight = new Date(now);
+            nextMidnight.setHours(24, 0, 0, 0);
+            const delay = nextMidnight.getTime() - now.getTime();
+            setTimeout(() => {
+                const hoje = new Date();
+                const iso = hoje.toISOString().split('T')[0];
+                document.getElementById('end-date').value = iso;
+                document.getElementById('start-date').value = iso;
+                carregarProdutividade();
+                scheduleDateRollover();
+            }, Math.max(1000, delay));
+        }
 
         // Inicializar datas
         const hoje = new Date();
@@ -123,6 +138,7 @@
         document.getElementById('start-date').value = hoje.toISOString().split('T')[0];
 
         carregarProdutividade();
+        scheduleDateRollover();
     </script>
 </body>
 </html>
