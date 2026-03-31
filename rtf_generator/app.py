@@ -737,6 +737,70 @@ def notify_pending_first_attendance():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/notify/opened', methods=['POST'])
+def notify_opened_tickets():
+    try:
+        from repositories.erp_repository import ERPRepository
+        from repositories.local_alert_repository import LocalAlertRepository
+        from services.telegram_service import TelegramService
+        tg_targets = [t.strip() for t in (os.getenv("TELEGRAM_CHAT_IDS", "") or "").split(",") if t.strip()]
+        has_tg = bool(os.getenv("TELEGRAM_BOT_TOKEN")) and bool(tg_targets)
+        if not has_tg:
+            return jsonify({"error": "Configure TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_IDS"}), 400
+        try:
+            window_minutes = int(request.args.get('window_minutes', '3'))
+        except Exception:
+            window_minutes = 3
+        dry_run = str(request.args.get('dry_run', '')).strip().lower() in {'1', 'true', 'yes'}
+        erp = ERPRepository()
+        alerts = LocalAlertRepository(app.config['LOCAL_DB'])
+        tg = TelegramService()
+        from datetime import datetime
+        now = datetime.now()
+        start_erp = int(now.strftime('%Y%m%d')) - 1
+        rows = erp.buscar_chamados_abertos_recentes_base(start_erp, limit=120)
+        sent = []
+        candidates = []
+        for d in rows:
+            cod = int(d.get('cod_solicitacao') or 0)
+            if cod <= 0:
+                continue
+            if alerts.was_sent(cod, "opened"):
+                continue
+            data_val = d.get('data_cad')
+            hora_val = d.get('hora_cad')
+            try:
+                hh = int(float(hora_val))
+                mm = int((float(hora_val) - hh) * 100)
+                ss = int((((float(hora_val) - hh) * 100) - mm) * 100)
+            except Exception:
+                hh, mm, ss = 0, 0, 0
+            s_date = str(int(data_val or 0)).zfill(8)
+            dt_open = datetime.strptime(f"{s_date}{hh:02d}{mm:02d}{ss:02d}", "%Y%m%d%H%M%S")
+            diff_min = int((now - dt_open).total_seconds() // 60)
+            if diff_min < 0 or diff_min > window_minutes:
+                continue
+            candidates.append({"cod_solicitacao": cod, "minutos": diff_min})
+            if dry_run:
+                continue
+            base_url = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
+            link = f"{base_url}/chamados?id={cod}" if base_url else ""
+            msg = f"Novo chamado aberto #{cod}\nSolicitante: {d.get('solicitante','')}\nTítulo: {d.get('titulo_solicitacao','')}"
+            if link:
+                msg = msg + f"\n{link}"
+            ok = False
+            for chat_id in tg_targets:
+                if tg.send(chat_id, msg):
+                    ok = True
+            if ok:
+                alerts.mark_sent(cod, "opened")
+                sent.append(cod)
+        if dry_run:
+            return jsonify({"dry_run": True, "window_minutes": window_minutes, "candidates": candidates})
+        return jsonify({"sent": sent})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/erp/chamado/<cod_solicitacao>')
 def get_erp_chamado(cod_solicitacao):
     try:

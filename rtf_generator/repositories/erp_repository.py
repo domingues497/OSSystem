@@ -357,39 +357,23 @@ class ERPRepository:
                 INNER JOIN chamados_escopo C ON (C.COD_SOLICITACAO = H.COD_SOLICITACAO)
                 WHERE H.DATA_GRAV = %s
             ),
-            today_msgs_nao_baixados AS (
-                SELECT
-                    H.COD_SOLICITACAO,
-                    H.{text_col} AS TXT_RAW,
-                    UPPER(H.{text_col}) AS TXT_UPPER
-                FROM BANCO01.DM1745 H
-                INNER JOIN chamados_nao_baixados C ON (C.COD_SOLICITACAO = H.COD_SOLICITACAO)
-                WHERE H.DATA_GRAV = %s
-            ),
             enviado_aprovacao_today AS (
                 SELECT DISTINCT COD_SOLICITACAO
-                FROM today_msgs_nao_baixados
-                WHERE TXT_RAW LIKE '%%solicitou a autorização de um gerente para a execução do serviço%%'
+                FROM today_msgs
+                WHERE TXT_UPPER LIKE '%%SOLICIT%%'
+                  AND TXT_UPPER LIKE '%%AUTORIZA%%'
+                  AND TXT_UPPER LIKE '%%GERENT%%'
             ),
             auth_approved_today AS (
                 SELECT DISTINCT COD_SOLICITACAO
-                FROM today_msgs_nao_baixados
-                WHERE TXT_RAW LIKE '%%A solicitação de autorização para gerência de número%%foi aprovada.%%'
+                FROM today_msgs
+                WHERE TXT_UPPER LIKE '%%AUTORIZA%%'
+                  AND TXT_UPPER LIKE '%%APROVAD%%'
             ),
             andamento_today AS (
                 SELECT DISTINCT COD_SOLICITACAO
                 FROM today_msgs
-                WHERE TXT_RAW LIKE '%%Solicitação aprovada por%%Solicitação atualizada para o status: Andamento.%%'
-            ),
-            finalizados_today AS (
-                SELECT COD_SOLICITACAO
-                FROM today_msgs
-                WHERE TXT_UPPER LIKE '%%SOLICITAÇÃO FINALIZADA POR%%'
-            ),
-            baixados_today AS (
-                SELECT COD_SOLICITACAO
-                FROM today_msgs
-                WHERE TXT_RAW LIKE '%%Solicitação encerrada por%%'
+                WHERE TXT_UPPER LIKE '%%STATUS:%%ANDAMENTO%%'
             )
             SELECT
                 (SELECT COUNT(*)
@@ -400,9 +384,17 @@ class ERPRepository:
                 (SELECT COUNT(*) FROM (SELECT DISTINCT COD_SOLICITACAO FROM enviado_aprovacao_today) X) AS enviado_aprovacao_hoje,
                 (SELECT COUNT(*) FROM (SELECT DISTINCT COD_SOLICITACAO FROM auth_approved_today) X) AS aprovados_hoje,
                 (SELECT COUNT(*) FROM (SELECT DISTINCT COD_SOLICITACAO FROM andamento_today) X) AS andamento_hoje,
-                (SELECT COUNT(*) FROM finalizados_today) AS finalizados_hoje,
-                (SELECT COUNT(*) FROM baixados_today) AS baixados_hoje
-        """, (dashboard_user_cod, dashboard_user_cod, d_erp, d_erp, d_erp))
+                (SELECT COUNT(*)
+                 FROM BANCO01.DM1744
+                 INNER JOIN chamados_escopo C ON (C.COD_SOLICITACAO = DM1744.COD_SOLICITACAO)
+                 WHERE DM1744.DATA_BAIXA = %s AND DM1744.COD_STATUS_DOC IN ('AV', 'BA')
+                ) AS finalizados_hoje,
+                (SELECT COUNT(*)
+                 FROM BANCO01.DM1744
+                 INNER JOIN chamados_escopo C ON (C.COD_SOLICITACAO = DM1744.COD_SOLICITACAO)
+                 WHERE DM1744.DATA_BAIXA = %s AND DM1744.COD_STATUS_DOC = 'BA'
+                ) AS baixados_hoje
+        """, (dashboard_user_cod, dashboard_user_cod, d_erp, d_erp, d_erp, d_erp))
 
         row = cur.fetchone() or (0, 0, 0, 0, 0, 0)
         cur.close()
@@ -603,6 +595,31 @@ class ERPRepository:
             ORDER BY DM1744.DATA_CAD ASC, DM1744.HORA_CAD ASC
         """
         cur.execute(query)
+        rows = cur.fetchall()
+        columns = [col[0].lower() for col in cur.description]
+        results = [dict(zip(columns, row)) for row in rows]
+        cur.close()
+        conn.close()
+        return results
+
+    def buscar_chamados_abertos_recentes_base(self, start_erp, limit=80):
+        conn = get_erp_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT
+                DM1744.COD_SOLICITACAO,
+                DM1744.TITULO_SOLICITACAO,
+                DM1744.COD_STATUS_DOC,
+                DM1744.DATA_CAD,
+                DM1744.HORA_CAD,
+                DS0300.NOME_USUARIO as SOLICITANTE
+            FROM BANCO01.DM1744
+            LEFT JOIN public.DS0300 ON (DS0300.COD_USUARIO = DM1744.COD_USUARIO)
+            WHERE DM1744.COD_ASSUNTO IN (SELECT COD_ASSUNTO FROM BANCO01.DC1966 WHERE COD_DEPAR = 16)
+              AND DM1744.DATA_CAD >= %s
+            ORDER BY DM1744.DATA_CAD DESC, DM1744.HORA_CAD DESC, DM1744.COD_SOLICITACAO DESC
+            LIMIT %s
+        """, (start_erp, int(limit)))
         rows = cur.fetchall()
         columns = [col[0].lower() for col in cur.description]
         results = [dict(zip(columns, row)) for row in rows]
