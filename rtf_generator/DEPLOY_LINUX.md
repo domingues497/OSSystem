@@ -108,3 +108,7 @@ cd rtf_generator
 ./venv/bin/pip install -r requirements.txt
 sudo systemctl restart rtf_generator
 ```
+
+## Observação: app_modular
+
+O deploy via Gunicorn/systemd sobe a aplicação pelo arquivo `wsgi.py`, que instancia o app usando `app_modular.create_app()`.

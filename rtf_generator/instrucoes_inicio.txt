@@ -10,6 +10,6 @@ cd "d:\trabalhos faculdaded\OSSystem\rtf_generator"
 pip install -r requirements.txt
 
 # 4. Iniciar o servidor Flask
-python app.py
+python app_modular.py
 
 # O sistema estará disponível em: http://127.0.0.1:5000/
