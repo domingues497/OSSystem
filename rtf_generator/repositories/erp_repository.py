@@ -224,46 +224,7 @@ class ERPRepository:
         cur = conn.cursor()
         text_col = self._get_text_col(cur)
         dashboard_user_cod = int(os.getenv("DASHBOARD_USER_COD", "1538"))
-        
-        # Abertos
-        cur.execute("""
-            WITH chamados_abertos AS (
-                SELECT DM1744.COD_SOLICITACAO
-                FROM BANCO01.DM1744
-                WHERE DM1744.NUM_BD IN (
-                    SELECT B.NUM_BD
-                    FROM BANCO01.DC1964 A
-                    INNER JOIN BANCO01.DC1965 B ON (B.COD_DEPAR = A.COD_DEPAR)
-                    WHERE A.COD_USUARIO = %s
-                )
-                AND DM1744.COD_ASSUNTO IN (
-                    SELECT B.COD_ASSUNTO
-                    FROM BANCO01.DC1964 A
-                    INNER JOIN BANCO01.DC1966 B ON (B.COD_DEPAR = A.COD_DEPAR)
-                    WHERE A.COD_USUARIO = %s
-                )
-                AND DM1744.DATA_CAD = %s
-            )
-            SELECT COUNT(*) FROM chamados_abertos
-        """, (dashboard_user_cod, dashboard_user_cod, d_erp))
-        abertos = cur.fetchone()[0]
 
-        # Atendidos
-        cur.execute("SELECT COUNT(*) FROM BANCO01.DM1744 WHERE DATA_INIC_ATEND = %s AND COD_ASSUNTO IN (SELECT COD_ASSUNTO FROM BANCO01.DC1966 WHERE COD_DEPAR = 16)", (d_erp,))
-        atendidos = cur.fetchone()[0]
-
-        # Aprovados
-        cur.execute(f"""
-            SELECT COUNT(DISTINCT DM1745.COD_SOLICITACAO) 
-            FROM BANCO01.DM1745
-            INNER JOIN BANCO01.DM1744 ON (DM1744.COD_SOLICITACAO = DM1745.COD_SOLICITACAO)
-            WHERE DM1745.DATA_GRAV = %s 
-              AND DM1744.COD_ASSUNTO IN (SELECT COD_ASSUNTO FROM BANCO01.DC1966 WHERE COD_DEPAR = 16)
-              AND (UPPER({text_col}) LIKE '%%AUTORIZAÇÃO%%' AND UPPER({text_col}) LIKE '%%APROVADA%%')
-        """, (d_erp,))
-        aprovados = cur.fetchone()[0]
-
-        # Finalizados
         cur.execute(f"""
             WITH chamados_escopo AS (
                 SELECT DM1744.COD_SOLICITACAO
@@ -281,43 +242,40 @@ class ERPRepository:
                     WHERE A.COD_USUARIO = %s
                 )
             )
-            SELECT COUNT(*)
-            FROM BANCO01.DM1745 H
-            INNER JOIN chamados_escopo C ON (C.COD_SOLICITACAO = H.COD_SOLICITACAO)
-            WHERE H.{text_col} LIKE %s
-              AND H.DATA_GRAV = %s
-        """, (dashboard_user_cod, dashboard_user_cod, '%Solicitação finalizada por%', d_erp))
-        finalizados = cur.fetchone()[0]
-
-        # Encerrados
-        cur.execute(f"""
-            WITH chamados_abertos AS (
-                SELECT DM1744.COD_SOLICITACAO
-                FROM BANCO01.DM1744
-                WHERE DM1744.NUM_BD IN (
-                    SELECT B.NUM_BD
-                    FROM BANCO01.DC1964 A
-                    INNER JOIN BANCO01.DC1965 B ON (B.COD_DEPAR = A.COD_DEPAR)
-                    WHERE A.COD_USUARIO = %s
-                )
-                AND DM1744.COD_ASSUNTO IN (
-                    SELECT B.COD_ASSUNTO
-                    FROM BANCO01.DC1964 A
-                    INNER JOIN BANCO01.DC1966 B ON (B.COD_DEPAR = A.COD_DEPAR)
-                    WHERE A.COD_USUARIO = %s
-                )
-            )
-            SELECT COUNT(*)
-            FROM BANCO01.DM1745 H
-            INNER JOIN chamados_abertos C ON (C.COD_SOLICITACAO = H.COD_SOLICITACAO)
-            WHERE H.{text_col} LIKE %s
-              AND H.DATA_GRAV = %s
-        """, (dashboard_user_cod, dashboard_user_cod, '%Solicitação encerrada por%', d_erp))
-        encerrados = cur.fetchone()[0]
+            SELECT
+                (SELECT COUNT(*)
+                 FROM BANCO01.DM1744
+                 INNER JOIN chamados_escopo C ON (C.COD_SOLICITACAO = DM1744.COD_SOLICITACAO)
+                 WHERE DM1744.DATA_CAD = %s
+                ) AS abertos,
+                (SELECT COUNT(*)
+                 FROM BANCO01.DM1744
+                 INNER JOIN chamados_escopo C ON (C.COD_SOLICITACAO = DM1744.COD_SOLICITACAO)
+                 WHERE DM1744.DATA_INIC_ATEND = %s
+                ) AS atendidos,
+                (SELECT COUNT(DISTINCT H.COD_SOLICITACAO)
+                 FROM BANCO01.DM1745 H
+                 INNER JOIN chamados_escopo C ON (C.COD_SOLICITACAO = H.COD_SOLICITACAO)
+                 WHERE H.DATA_GRAV = %s
+                   AND UPPER(H.{text_col}) LIKE '%%AUTORIZA%%'
+                   AND UPPER(H.{text_col}) LIKE '%%APROVAD%%'
+                ) AS aprovados,
+                (SELECT COUNT(*)
+                 FROM BANCO01.DM1744
+                 INNER JOIN chamados_escopo C ON (C.COD_SOLICITACAO = DM1744.COD_SOLICITACAO)
+                 WHERE DM1744.DATA_BAIXA = %s AND DM1744.COD_STATUS_DOC IN ('AV', 'BA')
+                ) AS finalizados,
+                (SELECT COUNT(*)
+                 FROM BANCO01.DM1744
+                 INNER JOIN chamados_escopo C ON (C.COD_SOLICITACAO = DM1744.COD_SOLICITACAO)
+                 WHERE DM1744.DATA_BAIXA = %s AND DM1744.COD_STATUS_DOC = 'BA'
+                ) AS encerrados
+        """, (dashboard_user_cod, dashboard_user_cod, d_erp, d_erp, d_erp, d_erp, d_erp))
+        abertos, atendidos, aprovados, finalizados, encerrados = cur.fetchone() or (0, 0, 0, 0, 0)
 
         cur.close()
         conn.close()
-        return {"abertos": abertos, "atendidos": atendidos, "aprovados": aprovados, "finalizados": finalizados, "encerrados": encerrados}
+        return {"abertos": int(abertos or 0), "atendidos": int(atendidos or 0), "aprovados": int(aprovados or 0), "finalizados": int(finalizados or 0), "encerrados": int(encerrados or 0)}
 
     def buscar_kpis_status_hoje(self, d_erp):
         conn = get_erp_connection()
