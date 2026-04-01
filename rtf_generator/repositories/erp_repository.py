@@ -952,7 +952,9 @@ class ERPRepository:
                       AND I.COD_USUARIO > 0
                 ) AS NO_ITERATION,
                 (COALESCE(AUTH.req_count, 0) > COALESCE(AUTH.appr_count, 0)) AS WAITING_AUTH,
-                (COALESCE(AUTH.appr_count, 0) > 0) AS AUTH_APPROVED
+                (COALESCE(AUTH.appr_count, 0) > 0) AS AUTH_APPROVED,
+                COALESCE(AUTH.req_count, 0) AS AUTH_REQ_COUNT,
+                COALESCE(AUTH.appr_count, 0) AS AUTH_APPR_COUNT
             FROM BANCO01.DM1744
             LEFT JOIN public.DS0300 ON (DS0300.COD_USUARIO = DM1744.COD_USUARIO)
             LEFT JOIN LATERAL (
@@ -972,9 +974,11 @@ class ERPRepository:
 
         params = []
 
+        status_filter_set = set()
         if status_filter:
             if isinstance(status_filter, str):
                 status_filter = status_filter.split(',')
+            status_filter_set = set(status_filter)
             query += " AND DM1744.COD_STATUS_DOC IN %s"
             params.append(tuple(status_filter))
 
@@ -995,7 +999,7 @@ class ERPRepository:
             )"""
             params.extend([f"%{clean_approver}%", f"%APROVADA POR {clean_approver}%", f"%{clean_approver}%"])
 
-        if kpi_type in {'enviado_aprovacao_hoje', 'aprovados_hoje', 'andamento_hoje', 'finalizados_hoje', 'baixados_hoje'}:
+        if kpi_type in {'abertos_hoje', 'enviado_aprovacao_hoje', 'aprovados_hoje', 'andamento_hoje', 'finalizados_hoje', 'baixados_hoje'}:
             query += """
                 AND DM1744.NUM_BD IN (
                     SELECT B.NUM_BD
@@ -1024,7 +1028,9 @@ class ERPRepository:
                 SELECT 1
                 FROM BANCO01.DM1745 K
                 WHERE K.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
-                  AND K.{text_col} LIKE '%%solicitou a autorização de um gerente para a execução do serviço%%'
+                  AND UPPER(K.{text_col}) LIKE '%%SOLICIT%%'
+                  AND UPPER(K.{text_col}) LIKE '%%AUTORIZA%%'
+                  AND UPPER(K.{text_col}) LIKE '%%GERENT%%'
             """
             if start_date:
                 query += " AND K.DATA_GRAV >= %s"
@@ -1038,7 +1044,8 @@ class ERPRepository:
                 SELECT 1
                 FROM BANCO01.DM1745 K
                 WHERE K.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
-                  AND K.{text_col} LIKE '%%A solicitação de autorização para gerência de número%%foi aprovada.%%'
+                  AND UPPER(K.{text_col}) LIKE '%%AUTORIZA%%'
+                  AND UPPER(K.{text_col}) LIKE '%%APROVAD%%'
             """
             if start_date:
                 query += " AND K.DATA_GRAV >= %s"
@@ -1052,7 +1059,7 @@ class ERPRepository:
                 SELECT 1
                 FROM BANCO01.DM1745 K
                 WHERE K.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
-                  AND K.{text_col} LIKE '%%Solicitação aprovada por%%Solicitação atualizada para o status: Andamento.%%'
+                  AND UPPER(K.{text_col}) LIKE '%%STATUS:%%ANDAMENTO%%'
             """
             if start_date:
                 query += " AND K.DATA_GRAV >= %s"
@@ -1062,43 +1069,43 @@ class ERPRepository:
                 params.append(int(end_date.replace('-', '')))
             query += ")"
         elif kpi_type == 'finalizados_hoje':
-            query += f""" AND EXISTS (
-                SELECT 1
-                FROM BANCO01.DM1745 K
-                WHERE K.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
-                  AND (UPPER(K.{text_col}) LIKE '%%SOLICITAÇÃO FINALIZADA POR%%')
-            """
             if start_date:
-                query += " AND K.DATA_GRAV >= %s"
+                query += " AND DM1744.DATA_BAIXA >= %s"
                 params.append(int(start_date.replace('-', '')))
             if end_date:
-                query += " AND K.DATA_GRAV <= %s"
+                query += " AND DM1744.DATA_BAIXA <= %s"
                 params.append(int(end_date.replace('-', '')))
-            query += ")"
+            query += " AND DM1744.COD_STATUS_DOC IN ('AV', 'BA')"
         elif kpi_type == 'baixados_hoje':
-            query += f""" AND EXISTS (
-                SELECT 1
-                FROM BANCO01.DM1745 K
-                WHERE K.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
-                  AND (
-                        UPPER(K.{text_col}) LIKE '%%SOLICITAÇÃO ENCERRADA POR%%'
-                        OR UPPER(K.{text_col}) LIKE '%%SOLICITACAO ENCERRADA POR%%'
-                  )
-            """
             if start_date:
-                query += " AND K.DATA_GRAV >= %s"
+                query += " AND DM1744.DATA_BAIXA >= %s"
                 params.append(int(start_date.replace('-', '')))
             if end_date:
-                query += " AND K.DATA_GRAV <= %s"
+                query += " AND DM1744.DATA_BAIXA <= %s"
                 params.append(int(end_date.replace('-', '')))
-            query += ")"
+            query += " AND DM1744.COD_STATUS_DOC = 'BA'"
         else:
-            if start_date:
-                query += " AND DM1744.DATA_CAD >= %s"
-                params.append(int(start_date.replace('-', '')))
-            if end_date:
-                query += " AND DM1744.DATA_CAD <= %s"
-                params.append(int(end_date.replace('-', '')))
+            if ('BA' in status_filter_set) and (start_date or end_date):
+                if start_date and end_date:
+                    query += " AND ((DM1744.COD_STATUS_DOC = 'BA' AND DM1744.DATA_BAIXA BETWEEN %s AND %s) OR (DM1744.COD_STATUS_DOC <> 'BA' AND DM1744.DATA_CAD BETWEEN %s AND %s))"
+                    start_erp = int(start_date.replace('-', ''))
+                    end_erp = int(end_date.replace('-', ''))
+                    params.extend([start_erp, end_erp, start_erp, end_erp])
+                elif start_date:
+                    query += " AND ((DM1744.COD_STATUS_DOC = 'BA' AND DM1744.DATA_BAIXA >= %s) OR (DM1744.COD_STATUS_DOC <> 'BA' AND DM1744.DATA_CAD >= %s))"
+                    start_erp = int(start_date.replace('-', ''))
+                    params.extend([start_erp, start_erp])
+                elif end_date:
+                    query += " AND ((DM1744.COD_STATUS_DOC = 'BA' AND DM1744.DATA_BAIXA <= %s) OR (DM1744.COD_STATUS_DOC <> 'BA' AND DM1744.DATA_CAD <= %s))"
+                    end_erp = int(end_date.replace('-', ''))
+                    params.extend([end_erp, end_erp])
+            else:
+                if start_date:
+                    query += " AND DM1744.DATA_CAD >= %s"
+                    params.append(int(start_date.replace('-', '')))
+                if end_date:
+                    query += " AND DM1744.DATA_CAD <= %s"
+                    params.append(int(end_date.replace('-', '')))
 
         if cod_solicitacao_filter:
             query += " AND DM1744.COD_SOLICITACAO = %s"
@@ -1136,6 +1143,8 @@ class ERPRepository:
                 "no_iteration": bool(r[6]),
                 "waiting_auth": bool(r[7]),
                 "auth_approved": bool(r[8]),
+                "auth_req_count": int(r[9] or 0),
+                "auth_appr_count": int(r[10] or 0),
             }
             for r in rows
         ]

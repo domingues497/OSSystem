@@ -167,17 +167,17 @@ class DashboardService:
             "aberta": ['IM', 'AB'],
             "aguardando": ['AA'],
             "andamento": ['EA', 'AN'],
-            "avaliacao": ['AV']
+            "avaliacao": ['AV'],
+            "encerrados": ['BA']
         }
         
         status_map = {
             "aberta": set(['IM', 'AB']),
             "aguardando": set(['AA']),
             "andamento": set(['EA', 'AN']),
-            "avaliacao": set(['AV'])
+            "avaliacao": set(['AV']),
+            "encerrados": set(['BA'])
         }
-        if f_kpi:
-            status_map["encerrados"] = set(['BA'])
         all_statuses = []
         for sts in status_map.values():
             all_statuses.extend(list(sts))
@@ -222,6 +222,8 @@ class DashboardService:
                 "no_iteration": bool(r["no_iteration"]) if col_name == "aberta" else False,
                 "waiting_auth": bool(r["waiting_auth"]),
                 "auth_approved": bool(r["auth_approved"]),
+                "auth_req_count": int(r.get("auth_req_count") or 0),
+                "auth_appr_count": int(r.get("auth_appr_count") or 0),
                 "has_note": tid in ids_with_notes
             }
             kanban[col_name].append(item)
