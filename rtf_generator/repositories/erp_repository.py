@@ -260,10 +260,13 @@ class ERPRepository:
                    AND UPPER(H.{text_col}) LIKE '%%AUTORIZA%%'
                    AND UPPER(H.{text_col}) LIKE '%%APROVAD%%'
                 ) AS aprovados,
-                (SELECT COUNT(*)
-                 FROM BANCO01.DM1744
-                 INNER JOIN chamados_escopo C ON (C.COD_SOLICITACAO = DM1744.COD_SOLICITACAO)
-                 WHERE DM1744.DATA_BAIXA = %s AND DM1744.COD_STATUS_DOC IN ('AV', 'BA')
+                (SELECT COUNT(DISTINCT H.COD_SOLICITACAO)
+                 FROM BANCO01.DM1745 H
+                 INNER JOIN chamados_escopo C ON (C.COD_SOLICITACAO = H.COD_SOLICITACAO)
+                 WHERE H.DATA_GRAV = %s
+                   AND UPPER(H.{text_col}) LIKE '%%SOLICIT%%'
+                   AND UPPER(H.{text_col}) LIKE '%%FINALIZAD%%'
+                   AND UPPER(H.{text_col}) NOT LIKE '%%ENCERRAD%%'
                 ) AS finalizados,
                 (SELECT COUNT(*)
                  FROM BANCO01.DM1744
@@ -332,6 +335,13 @@ class ERPRepository:
                 SELECT DISTINCT COD_SOLICITACAO
                 FROM today_msgs
                 WHERE TXT_UPPER LIKE '%%STATUS:%%ANDAMENTO%%'
+            ),
+            finalizados_today AS (
+                SELECT DISTINCT COD_SOLICITACAO
+                FROM today_msgs
+                WHERE TXT_UPPER LIKE '%%SOLICIT%%'
+                  AND TXT_UPPER LIKE '%%FINALIZAD%%'
+                  AND TXT_UPPER NOT LIKE '%%ENCERRAD%%'
             )
             SELECT
                 (SELECT COUNT(*)
@@ -342,17 +352,13 @@ class ERPRepository:
                 (SELECT COUNT(*) FROM (SELECT DISTINCT COD_SOLICITACAO FROM enviado_aprovacao_today) X) AS enviado_aprovacao_hoje,
                 (SELECT COUNT(*) FROM (SELECT DISTINCT COD_SOLICITACAO FROM auth_approved_today) X) AS aprovados_hoje,
                 (SELECT COUNT(*) FROM (SELECT DISTINCT COD_SOLICITACAO FROM andamento_today) X) AS andamento_hoje,
-                (SELECT COUNT(*)
-                 FROM BANCO01.DM1744
-                 INNER JOIN chamados_escopo C ON (C.COD_SOLICITACAO = DM1744.COD_SOLICITACAO)
-                 WHERE DM1744.DATA_BAIXA = %s AND DM1744.COD_STATUS_DOC IN ('AV', 'BA')
-                ) AS finalizados_hoje,
+                (SELECT COUNT(*) FROM (SELECT DISTINCT COD_SOLICITACAO FROM finalizados_today) X) AS finalizados_hoje,
                 (SELECT COUNT(*)
                  FROM BANCO01.DM1744
                  INNER JOIN chamados_escopo C ON (C.COD_SOLICITACAO = DM1744.COD_SOLICITACAO)
                  WHERE DM1744.DATA_BAIXA = %s AND DM1744.COD_STATUS_DOC = 'BA'
                 ) AS baixados_hoje
-        """, (dashboard_user_cod, dashboard_user_cod, d_erp, d_erp, d_erp, d_erp))
+        """, (dashboard_user_cod, dashboard_user_cod, d_erp, d_erp, d_erp))
 
         row = cur.fetchone() or (0, 0, 0, 0, 0, 0)
         cur.close()
@@ -1027,13 +1033,21 @@ class ERPRepository:
                 params.append(int(end_date.replace('-', '')))
             query += ")"
         elif kpi_type == 'finalizados_hoje':
+            query += f""" AND EXISTS (
+                SELECT 1
+                FROM BANCO01.DM1745 K
+                WHERE K.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
+                  AND UPPER(K.{text_col}) LIKE '%%SOLICIT%%'
+                  AND UPPER(K.{text_col}) LIKE '%%FINALIZAD%%'
+                  AND UPPER(K.{text_col}) NOT LIKE '%%ENCERRAD%%'
+            """
             if start_date:
-                query += " AND DM1744.DATA_BAIXA >= %s"
+                query += " AND K.DATA_GRAV >= %s"
                 params.append(int(start_date.replace('-', '')))
             if end_date:
-                query += " AND DM1744.DATA_BAIXA <= %s"
+                query += " AND K.DATA_GRAV <= %s"
                 params.append(int(end_date.replace('-', '')))
-            query += " AND DM1744.COD_STATUS_DOC IN ('AV', 'BA')"
+            query += ")"
         elif kpi_type == 'baixados_hoje':
             if start_date:
                 query += " AND DM1744.DATA_BAIXA >= %s"

@@ -113,6 +113,11 @@ class ChamadoService:
             if ("FINALIZAD" in txt_upper or "CONCLUÍD" in txt_upper or "SOLUCIONAD" in txt_upper or "RESOLVID" in txt_upper):
                 if fluxo["finalizacao"]["status"] == "pending":
                     fluxo["finalizacao"] = {"status": "completed", "data": dt_fmt, "dt": dt_obj}
+            
+            # Etapa 6: Encerramento via comentário (prioridade sobre DATA_BAIXA quando diverge)
+            if "ENCERRAD" in txt_upper and "SOLICIT" in txt_upper:
+                if fluxo["encerramento"]["status"] == "pending":
+                    fluxo["encerramento"] = {"status": "completed", "data": dt_fmt, "dt": dt_obj}
 
             # Formatar comentário para exibição (reverso no final ou inserção no topo)
             cod_usuario = row.get('cod_usuario')
@@ -135,9 +140,10 @@ class ChamadoService:
 
         # Encerramento (Status BA)
         if erp_data['cod_status_doc'] == 'BA':
-            data_baixa = format_erp_date(erp_data.get('data_baixa')) or erp_data['data_cad_fmt']
-            dt_baixa = erp_to_datetime(erp_data.get('data_baixa'), erp_data.get('hora_baixa')) or dt_abertura
-            fluxo["encerramento"] = {"status": "completed", "data": data_baixa, "dt": dt_baixa}
+            if fluxo["encerramento"]["status"] == "pending":
+                data_baixa = format_erp_date(erp_data.get('data_baixa')) or erp_data['data_cad_fmt']
+                dt_baixa = erp_to_datetime(erp_data.get('data_baixa'), erp_data.get('hora_baixa')) or dt_abertura
+                fluxo["encerramento"] = {"status": "completed", "data": data_baixa, "dt": dt_baixa}
 
         # Calcular durações entre etapas
         keys = ["abertura", "primeiro_atendimento", "autorizacao_gerencia", "aprovado_andamento", "finalizacao", "encerramento"]

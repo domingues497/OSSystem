@@ -17,6 +17,9 @@
                     <a href="/chamados" class="btn-icon" title="Filtrar Chamados" style="background: #1a73e8; color: white; border: none; width: 32px; height: 32px; border-radius: 6px;">
                         <i class="fas fa-search"></i>
                     </a>
+                    <button id="btn-print" class="btn-icon" title="Imprimir" onclick="handlePrintClick(event)" style="background: #5f6368; color: white; border: none; width: 32px; height: 32px; border-radius: 6px; cursor: pointer;">
+                        <i class="fas fa-print"></i>
+                    </button>
                 </div>
             </div>
 
@@ -47,31 +50,44 @@
         
         <!-- Dashboard de Estatísticas -->
         <div class="section" style="border: none; padding: 0; margin-bottom: 1.5rem;">
+            <div id="kpi-date-overlay" style="display:none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 9999; align-items: center; justify-content: center;">
+                <div style="background: #fff; border-radius: 10px; padding: 16px; width: 320px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+                    <div style="display:flex; align-items:center; justify-content: space-between; margin-bottom: 10px;">
+                        <strong>Data para KPIs (Hoje)</strong>
+                        <button type="button" onclick="closeKpiDateOverlay()" style="border: none; background: transparent; font-size: 18px; cursor: pointer;">×</button>
+                    </div>
+                    <input type="date" id="kpi-date-input" style="width: 100%; border: 1px solid #ddd; border-radius: 6px; padding: 8px; font-size: 0.9rem;">
+                    <div style="display:flex; gap: 8px; margin-top: 12px;">
+                        <button type="button" onclick="applyKpiDateOverride()" style="flex:1; padding: 8px 10px; border-radius: 6px; border: none; background: #1a73e8; color: #fff; font-weight: 600; cursor: pointer;">Aplicar</button>
+                        <button type="button" onclick="clearKpiDateOverride()" style="flex:1; padding: 8px 10px; border-radius: 6px; border: 1px solid #ddd; background: #fff; color: #444; font-weight: 600; cursor: pointer;">Limpar</button>
+                    </div>
+                </div>
+            </div>
             
             <div class="kpi-container">
                 <div class="kpi-card" onclick="abrirFiltroKPI('abertos_hoje')" style="cursor: pointer;">
                     <span class="kpi-value" id="kpi-abertos-hoje">0</span>
-                    <span class="kpi-label">Abertos Hoje</span>
+                    <span class="kpi-label">Abertos</span>
                 </div>
                 <div class="kpi-card" onclick="abrirFiltroKPI('enviado_aprovacao_hoje')" style="cursor: pointer;">
                     <span class="kpi-value" id="kpi-enviado-aprovacao-hoje" style="color: #f29900;">0</span>
-                    <span class="kpi-label">Enviado Aprovação Hoje</span>
+                    <span class="kpi-label">Enviado Aprovação</span>
                 </div>
                 <div class="kpi-card" onclick="abrirFiltroKPI('aprovados_hoje')" style="cursor: pointer;">
                     <span class="kpi-value" id="kpi-aprovados-hoje" style="color: #34a853;">0</span>
-                    <span class="kpi-label">Aprovados Hoje</span>
+                    <span class="kpi-label">Aprovados</span>
                 </div>
                 <div class="kpi-card" onclick="abrirFiltroKPI('andamento_hoje')" style="cursor: pointer;">
                     <span class="kpi-value" id="kpi-andamento-hoje" style="color: #1a73e8;">0</span>
-                    <span class="kpi-label">Em Andamento Hoje</span>
+                    <span class="kpi-label">Em Andamento</span> 
                 </div>
                 <div class="kpi-card" onclick="abrirFiltroKPI('finalizados_hoje')" style="cursor: pointer;">
                     <span class="kpi-value" id="kpi-finalizados-hoje" style="color: #a142f4;">0</span>
-                    <span class="kpi-label">Finalizados Hoje</span>
+                    <span class="kpi-label">Finalizados</span>
                 </div>
                 <div class="kpi-card" onclick="abrirFiltroKPI('baixados_hoje')" style="cursor: pointer;">
                     <span class="kpi-value" id="kpi-baixados-hoje" style="color: #5f6368;">0</span>
-                    <span class="kpi-label">Encerrados Hoje</span>
+                    <span class="kpi-label">Encerrados</span>
                 </div>
             </div>
 
@@ -99,7 +115,7 @@
                                     <span style="color: #a142f4; background: #f3e5f5; padding: 2px 8px; border-radius: 4px;">
                                         Finalizados: <span id="total-finalizados-periodo">0</span>
                                     </span>
-                                    <span style="color: #34a853; background: #e6f4ea; padding: 2px 8px; border-radius: 4px;">
+                                    <span style="color: #5f6368; background: #f1f3f4; padding: 2px 8px; border-radius: 4px;">
                                         Encerrados: <span id="total-encerrados-periodo">0</span>
                                     </span>
                                 </div>
@@ -158,6 +174,10 @@
         
         // Carregar configurações do localStorage
         let soundEnabled = localStorage.getItem('dash-sound-enabled') === 'true';
+        let kpiDateOverride = localStorage.getItem('dash-kpi-date') || '';
+        let printClicks = 0;
+        let printLast = 0;
+        let printTimer = null;
 
         function applyInitialSettings() {
             // Aplicar intervalo de atualização
@@ -214,6 +234,7 @@
                         const start = document.getElementById('dash-start-date').value;
                         const end = document.getElementById('dash-end-date').value;
                         let url = `/api/erp/estatisticas?start_date=${start}&end_date=${end}`;
+                        if (kpiDateOverride) url += `&kpi_date=${encodeURIComponent(kpiDateOverride)}`;
 
                         const response = await fetch(url);
                         const data = await response.json();
@@ -221,10 +242,10 @@
                         // Verificar novos chamados para o som
                         const currentOpen = data.kpis.abertos_hoje;
                         const prevOpenCount = lastOpenCount;
-                        if (soundEnabled && prevOpenCount !== null && currentOpen > prevOpenCount) {
+                        if (!kpiDateOverride && soundEnabled && prevOpenCount !== null && currentOpen > prevOpenCount) {
                             document.getElementById('notification-sound').play().catch(e => console.error("Erro ao tocar som:", e));
                         }
-                        if (prevOpenCount !== null && currentOpen > prevOpenCount) {
+                        if (!kpiDateOverride && prevOpenCount !== null && currentOpen > prevOpenCount) {
                             fetch('/api/notify/opened', { method: 'POST' }).catch(() => {});
                         }
                         lastOpenCount = currentOpen;
@@ -235,6 +256,7 @@
                         document.getElementById('kpi-andamento-hoje').textContent = data.kpis.andamento_hoje;
                         document.getElementById('kpi-finalizados-hoje').textContent = data.kpis.finalizados_hoje;
                         document.getElementById('kpi-baixados-hoje').textContent = data.kpis.baixados_hoje;
+                        updateKpiLabels();
 
                         const labels = []; const values = []; const colors = [];
                         data.detalhes.forEach(stat => {
@@ -591,7 +613,7 @@
 
         function abrirFiltroKPI(key) {
             const kpis = ['abertos_hoje', 'enviado_aprovacao_hoje', 'aprovados_hoje', 'andamento_hoje', 'finalizados_hoje', 'baixados_hoje'];
-            const today = getLocalDateISO(new Date());
+            const today = kpiDateOverride || getLocalDateISO(new Date());
             
             if (kpis.includes(key)) {
                 // Se for um KPI de "Hoje", ignorar o filtro do dashboard e usar a data atual
@@ -631,6 +653,63 @@
                 carregarDashboard();
                 scheduleDateRollover();
             }, Math.max(1000, delay));
+        }
+
+        function updateKpiLabels() {
+            const date = kpiDateOverride;
+            const suffix = date ? ` (${date.split('-').reverse().join('/')})` : '';
+            const labels = document.querySelectorAll('.kpi-label');
+            labels.forEach(el => {
+                const base = el.dataset.baseLabel || el.textContent;
+                if (!el.dataset.baseLabel) el.dataset.baseLabel = base.replace(/\s+\(\d{2}\/\d{2}\/\d{4}\)$/, '');
+                el.textContent = el.dataset.baseLabel + suffix;
+            });
+        }
+
+        function openKpiDateOverlay() {
+            const overlay = document.getElementById('kpi-date-overlay');
+            const input = document.getElementById('kpi-date-input');
+            if (input) input.value = kpiDateOverride || getLocalDateISO(new Date());
+            if (overlay) overlay.style.display = 'flex';
+        }
+
+        function closeKpiDateOverlay() {
+            const overlay = document.getElementById('kpi-date-overlay');
+            if (overlay) overlay.style.display = 'none';
+        }
+
+        function applyKpiDateOverride() {
+            const input = document.getElementById('kpi-date-input');
+            const val = (input && input.value) ? input.value : '';
+            kpiDateOverride = val;
+            if (kpiDateOverride) localStorage.setItem('dash-kpi-date', kpiDateOverride);
+            closeKpiDateOverlay();
+            carregarDashboard();
+        }
+
+        function clearKpiDateOverride() {
+            kpiDateOverride = '';
+            localStorage.removeItem('dash-kpi-date');
+            closeKpiDateOverlay();
+            carregarDashboard();
+        }
+
+        function handlePrintClick(e) {
+            if (e) e.preventDefault();
+            const now = Date.now();
+            if (now - printLast > 1200) printClicks = 0;
+            printLast = now;
+            printClicks += 1;
+            if (printTimer) clearTimeout(printTimer);
+            printTimer = setTimeout(() => {
+                if (printClicks === 1) window.print();
+                printClicks = 0;
+            }, 350);
+            if (printClicks >= 5) {
+                printClicks = 0;
+                if (printTimer) clearTimeout(printTimer);
+                openKpiDateOverlay();
+            }
         }
         
         function setupHiddenProdutividadeShortcut() {

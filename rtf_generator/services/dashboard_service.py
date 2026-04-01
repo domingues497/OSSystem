@@ -7,7 +7,7 @@ class DashboardService:
         self.erp_repo = erp_repo
         self.local_repo = local_repo
 
-    def obter_estatisticas(self, start_date_str=None, end_date_str=None):
+    def obter_estatisticas(self, start_date_str=None, end_date_str=None, kpi_date_str=None):
         now = datetime.now()
         
         if start_date_str and end_date_str:
@@ -17,7 +17,14 @@ class DashboardService:
             end_dt = now
             start_dt = now - timedelta(days=6)
             
-        today_erp = int(now.strftime('%Y%m%d'))
+        if kpi_date_str:
+            try:
+                kpi_dt = datetime.strptime(kpi_date_str, '%Y-%m-%d')
+            except Exception:
+                kpi_dt = now
+        else:
+            kpi_dt = now
+        today_erp = int(kpi_dt.strftime('%Y%m%d'))
         
         # Gerar lista de dias no período
         period_days = []

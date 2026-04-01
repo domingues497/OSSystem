@@ -60,7 +60,8 @@ def get_chamado_detalhe(cod_solicitacao):
 def get_estatisticas():
     start = request.args.get('start_date')
     end = request.args.get('end_date')
-    return jsonify(dashboard_service.obter_estatisticas(start, end))
+    kpi_date = request.args.get('kpi_date')
+    return jsonify(dashboard_service.obter_estatisticas(start, end, kpi_date))
 
 @erp_bp.route('/kanban')
 def get_kanban():
