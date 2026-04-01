@@ -6,6 +6,7 @@ from repositories.erp_repository import ERPRepository
 from repositories.local_alert_repository import LocalAlertRepository
 from services.telegram_service import TelegramService
 from config import Config
+from utils.datetime_utils import erp_to_datetime, add_business_minutes, business_minutes_between
 
 notify_bp = Blueprint('notify', __name__)
 
@@ -43,20 +44,19 @@ def notify_pending_first_attendance():
 
         for d in pendentes:
             cod = int(d['cod_solicitacao'])
-            data_val = d.get('data_cad')
-            hora_val = d.get('hora_cad')
-            try:
-                hh = int(float(hora_val))
-                mm = int((float(hora_val) - hh) * 100)
-                ss = int((((float(hora_val) - hh) * 100) - mm) * 100)
-            except Exception:
-                hh, mm, ss = 0, 0, 0
-            s_date = str(int(data_val)).zfill(8)
-            dt_open = datetime.strptime(f"{s_date}{hh:02d}{mm:02d}{ss:02d}", "%Y%m%d%H%M%S")
-            diff_min = int((datetime.now() - dt_open).total_seconds() // 60)
-            remaining = sla_minutes - diff_min
-            should_open = diff_min >= 0 and diff_min <= open_window_minutes
-            should_pre = remaining > 0 and remaining <= pre_minutes
+            dt_open = erp_to_datetime(d.get('data_cad'), d.get('hora_cad'))
+            if not dt_open:
+                continue
+            now = datetime.now()
+            deadline = add_business_minutes(dt_open, sla_minutes)
+            warn_at = add_business_minutes(dt_open, max(0, sla_minutes - pre_minutes))
+            elapsed_bus = business_minutes_between(dt_open, now)
+            remaining_bus = max(0, sla_minutes - elapsed_bus)
+            diff_min = elapsed_bus
+            remaining = remaining_bus
+            real_diff_min = int((now - dt_open).total_seconds() // 60)
+            should_open = real_diff_min >= 0 and real_diff_min <= open_window_minutes
+            should_pre = (warn_at is not None) and (deadline is not None) and (now >= warn_at) and (now < deadline)
             already_open = (not ignore_sent) and alerts.was_sent(cod, "sla_open")
             already_pre = (not ignore_sent) and alerts.was_sent(cod, "sla_pre")
             if should_open and already_open:
@@ -79,9 +79,8 @@ def notify_pending_first_attendance():
                 candidates_pre.append(item)
             if dry_run:
                 continue
-
-            data_iso = f"{s_date[0:4]}-{s_date[4:6]}-{s_date[6:8]}"
-            hora_fmt = f"{hh:02d}:{mm:02d}:{ss:02d}"
+            data_iso = dt_open.strftime('%Y-%m-%d')
+            hora_fmt = dt_open.strftime('%H:%M:%S')
             base_url = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
             link = f"{base_url}/chamados?id={cod}" if base_url else ""
 

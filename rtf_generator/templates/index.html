@@ -452,18 +452,60 @@
         function calculateSLA(dataCad, horaCad) {
             const now = new Date();
             const openDate = new Date(`${dataCad}T${horaCad}`);
-            let deadline = new Date(openDate);
-            const startH = 7, startM = 30, endH = 18;
-            
-            if (deadline.getHours() < startH || (deadline.getHours() === startH && deadline.getMinutes() < startM)) deadline.setHours(startH, startM, 0);
-            if (deadline.getHours() >= endH) { deadline.setDate(deadline.getDate()+1); deadline.setHours(startH, startM, 0); }
-            deadline.setMinutes(deadline.getMinutes() + 30);
-            if (deadline.getHours() >= endH) { 
-                let diff = (deadline.getHours()*60+deadline.getMinutes()) - (endH*60);
-                deadline.setDate(deadline.getDate()+1); deadline.setHours(startH, startM + diff, 0);
-            }
-            
-            let diff = deadline - now;
+
+            const windowsForDate = (d) => {
+                const dow = d.getDay();
+                if (dow === 0 || dow === 6) return [];
+                if (dow === 5) return [[7 * 60 + 30, 12 * 60], [13 * 60, 17 * 60]];
+                return [[7 * 60 + 30, 12 * 60], [13 * 60, 18 * 60]];
+            };
+
+            const addBusinessMinutes = (startDt, mins) => {
+                if (!startDt) return null;
+                let remaining = Math.max(0, parseInt(mins || 0));
+                let cursor = new Date(startDt.getTime());
+                cursor.setMilliseconds(0);
+                while (remaining > 0) {
+                    const windows = windowsForDate(cursor);
+                    if (windows.length === 0) {
+                        cursor.setDate(cursor.getDate() + 1);
+                        cursor.setHours(0, 0, 0, 0);
+                        continue;
+                    }
+                    const curMin = cursor.getHours() * 60 + cursor.getMinutes();
+                    let active = null;
+                    let nextStart = null;
+                    for (const [wStart, wEnd] of windows) {
+                        if (curMin < wStart) { nextStart = wStart; break; }
+                        if (curMin >= wStart && curMin < wEnd) { active = [wStart, wEnd]; break; }
+                    }
+                    if (!active) {
+                        if (nextStart !== null) {
+                            cursor.setHours(Math.floor(nextStart / 60), nextStart % 60, 0, 0);
+                            continue;
+                        }
+                        cursor.setDate(cursor.getDate() + 1);
+                        cursor.setHours(0, 0, 0, 0);
+                        continue;
+                    }
+                    const [, wEnd] = active;
+                    const endDt = new Date(cursor.getTime());
+                    endDt.setHours(Math.floor(wEnd / 60), wEnd % 60, 0, 0);
+                    const windowRemaining = Math.floor((endDt.getTime() - cursor.getTime()) / 60000);
+                    if (windowRemaining <= 0) {
+                        cursor = endDt;
+                        continue;
+                    }
+                    const take = Math.min(remaining, windowRemaining);
+                    cursor = new Date(cursor.getTime() + take * 60000);
+                    remaining -= take;
+                }
+                return cursor;
+            };
+
+            const deadline = addBusinessMinutes(openDate, 30);
+
+            let diff = (deadline ? deadline.getTime() : now.getTime()) - now.getTime();
             let overdue = diff < 0;
             let abs = Math.abs(diff);
             let h = Math.floor(abs/3600000), m = Math.floor((abs%3600000)/60000), s = Math.floor((abs%60000)/1000);

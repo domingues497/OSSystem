@@ -81,11 +81,14 @@
                 </select>
             </div>
             <div class="filter-group filter-actions">
-                <button type="button" class="btn btn-filter" onclick="carregarKanban();">
+                <button type="button" class="btn btn-filter" onclick="carregarKanban();" style="padding: 6px 10px; font-size: 0.8rem;">
                     <i class="fas fa-filter"></i> Filtrar
                 </button>
-                <button type="button" class="btn btn-filter btn-secondary" onclick="limparFiltros()">
+                <button type="button" class="btn btn-filter btn-secondary" onclick="limparFiltros()" style="padding: 6px 10px; font-size: 0.8rem;">
                     <i class="fas fa-eraser"></i> Limpar
+                </button>
+                <button type="button" class="btn btn-filter" id="btn-only-approved" onclick="toggleOnlyApproved()" style="padding: 6px 10px; font-size: 0.8rem; background: #1e8e3e; color: white; border: none;">
+                    <i class="fas fa-check"></i> Aprovados
                 </button>
             </div>
         </div>
@@ -194,6 +197,7 @@
         };
         let aguardandoOrderMode = localStorage.getItem('dash-aguardando-order') || 'cor';
         let lastKanbanData = null;
+        let onlyApproved = localStorage.getItem('chamados-only-approved') === '1';
 
         function setupAutoRefresh() {
             if(refreshTimer) clearInterval(refreshTimer);
@@ -224,6 +228,26 @@
             if (modeIcon) {
                 modeIcon.style.color = aguardandoOrderMode === 'cor' ? '#1a73e8' : '';
             }
+            updateOnlyApprovedButton();
+        }
+        
+        function updateOnlyApprovedButton() {
+            const btn = document.getElementById('btn-only-approved');
+            if (!btn) return;
+            if (onlyApproved) {
+                btn.style.background = '#0b8043';
+                btn.style.boxShadow = '0 0 0 2px rgba(11,128,67,0.25)';
+            } else {
+                btn.style.background = '#1e8e3e';
+                btn.style.boxShadow = '';
+            }
+        }
+        
+        function toggleOnlyApproved() {
+            onlyApproved = !onlyApproved;
+            localStorage.setItem('chamados-only-approved', onlyApproved ? '1' : '0');
+            updateOnlyApprovedButton();
+            renderTodasColunas();
         }
 
         function limparFiltros() {
@@ -315,6 +339,14 @@
             if (lastKanbanData.encerrados) cols.push('encerrados');
             cols.forEach(col => {
                 let tickets = [...lastKanbanData[col]];
+                if (onlyApproved) {
+                    tickets = tickets.filter(t => {
+                        const req = parseInt(t.auth_req_count || 0);
+                        const appr = parseInt(t.auth_appr_count || 0);
+                        if (req > 0) return appr >= req;
+                        return !!t.auth_approved;
+                    });
+                }
                 tickets.sort((a, b) => {
                     if (col === 'aguardando' && aguardandoOrderMode === 'cor') {
                         const group = (t) => {
