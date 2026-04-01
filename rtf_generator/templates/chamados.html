@@ -47,7 +47,7 @@
             </div>
             <div class="filter-group">
                 <label class="filter-label">Ultimo Tec:</label>
-                <select id="filter-aprovador" class="filter-input" style="padding: 8px;" onchange="carregarChamados(); carregarKanban();">
+                <select id="filter-aprovador" class="filter-input" style="padding: 8px;" onchange="carregarKanban();">
                     <option value="">Todos</option>
                 </select>
             </div>
@@ -61,7 +61,7 @@
             </div>
             <div class="filter-group">
                 <label class="filter-label">Tipo:</label>
-                <select id="filter-tipo" class="filter-input" style="padding: 8px;" onchange="carregarAssuntos(); carregarAtivos(); carregarChamados(); carregarKanban();">
+                <select id="filter-tipo" class="filter-input" style="padding: 8px;" onchange="carregarAssuntos(); carregarAtivos(); carregarKanban();">
                     <option value="">Todos</option>
                     <option value="Incidente">Incidente</option>
                     <option value="Requisição">Requisição</option>
@@ -70,18 +70,18 @@
             </div>
             <div class="filter-group">
                 <label class="filter-label">Assunto:</label>
-                <select id="filter-assunto" class="filter-input" style="padding: 8px;" onchange="carregarAtivos(); carregarChamados(); carregarKanban();">
+                <select id="filter-assunto" class="filter-input" style="padding: 8px;" onchange="carregarAtivos(); carregarKanban();">
                     <option value="">Todos</option>
                 </select>
             </div>
             <div class="filter-group">
                 <label class="filter-label">Ativo:</label>
-                <select id="filter-ativo" class="filter-input" style="padding: 8px;" onchange="carregarChamados(); carregarKanban();">
+                <select id="filter-ativo" class="filter-input" style="padding: 8px;" onchange="carregarKanban();">
                     <option value="">Todos</option>
                 </select>
             </div>
             <div class="filter-group filter-actions">
-                <button type="button" class="btn btn-filter" onclick="carregarChamados(); carregarKanban();">
+                <button type="button" class="btn btn-filter" onclick="carregarKanban();">
                     <i class="fas fa-filter"></i> Filtrar
                 </button>
                 <button type="button" class="btn btn-filter btn-secondary" onclick="limparFiltros()">
@@ -153,7 +153,7 @@
                     </div>
                     <div class="kanban-cards" id="cards-avaliacao"></div>
                 </div>
-                <div class="kanban-column" id="col-encerrados" style="display:none;">
+                <div class="kanban-column" id="col-encerrados">
                     <div class="kanban-header">
                         <span>ENCERRADOS</span>
                         <div style="display: flex; align-items: center; gap: 10px;">
@@ -168,28 +168,6 @@
             </div>
         </div>
 
-        <!-- Tabela oculta para suportar o toggleDetails que os cards usam -->
-        <table style="display:none;"><tbody id="details-anchor"></tbody></table>
-
-        <div class="table-container" style="margin-top: 2rem; border-top: 2px solid #eee; padding-top: 2rem;">
-            <h2 style="font-size: 1.2rem; color: #444; margin-bottom: 1rem;"><i class="fas fa-list"></i> Lista Detalhada</h2>
-            <table id="tickets-table">
-                <thead>
-                    <tr>
-                        <th style="width: 100px;">ID</th>
-                        <th style="width: 150px;">Status</th>
-                        <th style="width: 120px;">Data</th>
-                        <th style="width: 200px;">Solicitante</th>
-                        <th>Assunto</th>
-                        <th>Título</th>
-                        <th style="width: 80px; text-align: center;">Ações</th>
-                    </tr>
-                </thead>
-                <tbody id="tickets-body">
-                    <tr><td colspan="7" class="no-data">Selecione os status e clique em filtrar.</td></tr>
-                </tbody>
-            </table>
-        </div>
     </div>
 
     <!-- Modal de Detalhes -->
@@ -204,9 +182,7 @@
         let selectedStatuses = [];
         let refreshTimer = null;
         let hasLoadedKanban = false;
-        let hasLoadedChamados = false;
         let kanbanRequestId = 0;
-        let chamadosRequestId = 0;
         
         // Configurações do Kanban
         let kanbanSort = {
@@ -275,7 +251,6 @@
             } catch (e) {}
             carregarAssuntos();
             carregarAtivos();
-            carregarChamados();
             carregarKanban();
         }
 
@@ -504,217 +479,6 @@
             });
             closeDetails();
             carregarKanban(); // Atualiza o kanban para mostrar o ícone 📝
-            carregarChamados(); // Atualiza a lista também
-        }
-
-
-        async function carregarChamados() {
-            const currentRequestId = ++chamadosRequestId;
-            const loading = document.getElementById('loading');
-            const tbody = document.getElementById('tickets-body');
-            const filterId = document.getElementById('filter-id').value.trim();
-            const filterSolicitante = document.getElementById('filter-solicitante').value.trim();
-            const filterStartDate = document.getElementById('filter-start-date').value;
-            const filterEndDate = document.getElementById('filter-end-date').value;
-            const filterTipo = document.getElementById('filter-tipo').value;
-            const filterAssunto = document.getElementById('filter-assunto').value;
-            const filterAtivo = document.getElementById('filter-ativo').value;
-            const filterAprovador = document.getElementById('filter-aprovador').value.trim();
-            
-            const showOverlay = !hasLoadedChamados;
-            if (showOverlay) {
-                loading.style.display = 'flex';
-                tbody.innerHTML = '';
-            }
-
-            try {
-                let url = '/api/erp/chamados';
-                const queryParams = [];
-
-                // Preservar parâmetros KPI ou Status se vierem da URL
-                const urlParams = new URLSearchParams(window.location.search);
-                const kpi = urlParams.get('kpi');
-                if (kpi) {
-                    queryParams.push(`kpi=${kpi}`);
-                }
-                const status = urlParams.get('status');
-                if (status) {
-                    queryParams.push(`status=${status}`);
-                }
-
-                if (filterAprovador) {
-                    queryParams.push(`aprovador=${encodeURIComponent(filterAprovador)}`);
-                }
-                if (filterId) {
-                    queryParams.push(`cod_solicitacao=${filterId}`);
-                }
-                if (filterSolicitante) {
-                    queryParams.push(`solicitante=${encodeURIComponent(filterSolicitante)}`);
-                }
-                if (filterStartDate) {
-                    queryParams.push(`start_date=${filterStartDate}`);
-                }
-                if (filterEndDate) {
-                    queryParams.push(`end_date=${filterEndDate}`);
-                }
-                if (filterTipo) {
-                    queryParams.push(`tipo=${filterTipo}`);
-                }
-                if (filterAssunto) {
-                    queryParams.push(`assunto=${encodeURIComponent(filterAssunto)}`);
-                }
-                if (filterAtivo) {
-                    queryParams.push(`ativo=${encodeURIComponent(filterAtivo)}`);
-                }
-
-                if (queryParams.length > 0) {
-                    url += `?${queryParams.join('&')}`;
-                }
-
-                const response = await fetch(url);
-                const data = await response.json();
-                if (currentRequestId !== chamadosRequestId) return;
-
-                if (data.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="no-data">Nenhum chamado encontrado com estes filtros.</td></tr>';
-                    hasLoadedChamados = true;
-                    return;
-                }
-
-                tbody.innerHTML = data.map(ticket => `
-                    <tr class="main-row" onclick="toggleDetails('${ticket.cod_solicitacao}')">
-                        <td><strong>#${ticket.cod_solicitacao} ${ticket.has_local_note ? '📝' : ''}</strong></td>
-                        <td>
-                            <span class="status-badge">${ticket.status_name}</span>
-                            ${ticket.foi_aprovado ? '<span class="approved-badge">✅ Aprovado</span>' : ''}
-                        </td>
-                        <td>${ticket.data_cad_fmt}</td>
-                        <td>${ticket.solicitante}</td>
-                        <td><span style="font-size: 0.75rem; color: #666;">${ticket.assunto || 'N/A'}</span></td>
-                        <td>${ticket.titulo_solicitacao}</td>
-                        <td style="text-align:center;"><span id="icon-${ticket.cod_solicitacao}">➕</span></td>
-                    </tr>
-                    <tr id="details-${ticket.cod_solicitacao}" class="details-row">
-                        <td colspan="7">
-                            <div class="details-content" id="content-${ticket.cod_solicitacao}">
-                                <div class="loading">Carregando detalhes...</div>
-                            </div>
-                        </td>
-                    </tr>
-                `).join('');
-                hasLoadedChamados = true;
-            } catch (e) {
-                console.error('Erro ao buscar chamados:', e);
-                tbody.innerHTML = `<tr><td colspan="7" class="no-data" style="color:red;">Erro ao carregar dados do ERP: ${e.message}</td></tr>`;
-            } finally {
-                if (showOverlay) loading.style.display = 'none';
-            }
-        }
-
-        async function toggleDetails(id) {
-            const detailsRow = document.getElementById(`details-${id}`);
-            const contentDiv = document.getElementById(`content-${id}`);
-            const icon = document.getElementById(`icon-${id}`);
-
-            if (detailsRow.style.display === 'table-row') {
-                detailsRow.style.display = 'none';
-                icon.textContent = '➕';
-            } else {
-                detailsRow.style.display = 'table-row';
-                icon.textContent = '➖';
-                
-                if (contentDiv.querySelector('.loading')) {
-                    try {
-                        const response = await fetch(`/api/erp/chamado/${id}`);
-                        const data = await response.json();
-                        
-                        contentDiv.innerHTML = `
-                            <div class="flow-container">
-                                ${['Abertura','1º Atend.','Autoriz. Gerência','Aprovado','Finaliz.','Encerr.'].map((l,i) => {
-                                    const stepKeys = ['abertura','primeiro_atendimento','autorizacao_gerencia','aprovado_andamento','finalizacao','encerramento'];
-                                    const step = stepKeys[i];
-                                    const s = data.fluxo_etapas[step];
-                                    const duration = s.duracao_proxima ? `<div class="step-duration">${s.duracao_proxima}</div>` : '';
-                                    const statusClass = s.status === 'completed' ? 'active' : (s.status === 'skipped' ? 'skipped' : '');
-                                    
-                                    return `
-                                        <div class="flow-step ${statusClass}">
-                                            <div class="step-icon">${i+1}</div>
-                                            <span class="step-label">${l}</span>
-                                            <span class="step-date">${s.data || ''}</span>
-                                            ${duration}
-                                        </div>
-                                    `;
-                                }).join('')}
-                            </div>
-                            <div class="details-grid">
-                                <div>
-                                    <p><strong>Descrição:</strong><br>${data.descr_solicitacao || 'Sem descrição.'}</p>
-                                    <p><strong>Ativo:</strong> ${data.descr_ativo || 'N/A'}</p>
-                                    <p><strong>Tag:</strong> ${data.tag || 'N/A'}</p>
-                                </div>
-                                <div>
-                                    <div class="comment-section">
-                                        <strong>📜 Histórico ERP:</strong>
-                                        <div style="max-height: 250px; overflow-y: auto; margin-top: 10px;">
-                                            ${data.comentarios_erp && data.comentarios_erp.length > 0 ? data.comentarios_erp.map(c => `
-                                                <div class="comment-bubble ${c.destacar ? 'highlight' : ''}">
-                                                    <div class="comment-meta">
-                                                        <span>👤 ${c.usuario}</span>
-                                                        <span>📅 ${c.data} ${c.hora}</span>
-                                                    </div>
-                                                    <div style="font-size:0.9rem;">${c.texto}</div>
-                                                </div>
-                                            `).join('') : '<p style="color:#999; font-style:italic;">Sem comentários.</p>'}
-                                        </div>
-                                    </div>
-                                    <div class="local-notes-section">
-                                        <strong>📝 Notas Locais:</strong>
-                                        <div id="notes-list-${id}" style="margin-top:10px;">
-                                            ${data.anotacoes_locais.map(n => `
-                                                <div class="local-note-bubble">
-                                                    <div class="comment-meta"><span>📅 ${n.created_at}</span></div>
-                                                    <div style="font-size:0.9rem;">${n.note}</div>
-                                                </div>
-                                            `).join('')}
-                                        </div>
-                                        <textarea id="note-text-${id}" class="note-textarea" placeholder="Adicionar nota..."></textarea>
-                                        <button class="btn-small" onclick="salvarNota('${id}')">Salvar</button>
-                                    </div>
-                                </div>
-                            </div>
-                        `;
-                    } catch (e) {
-                        contentDiv.innerHTML = `<span style="color:red;">Erro: ${e.message}</span>`;
-                    }
-                }
-            }
-        }
-
-        async function salvarNota(id) {
-            const textarea = document.getElementById(`note-text-${id}`);
-            const note = textarea.value.trim();
-            if (!note) return;
-
-            try {
-                const response = await fetch('/api/local/note', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ cod_solicitacao: id, note: note })
-                });
-
-                if (response.ok) {
-                    textarea.value = '';
-                    // Recarregar a lista inteira para atualizar o ícone 📝 na linha principal
-                    carregarChamados();
-                    
-                    // Fechar os detalhes após salvar
-                    const detailsRow = document.getElementById(`details-${id}`);
-                    const icon = document.getElementById(`icon-${id}`);
-                    if (detailsRow) detailsRow.style.display = 'none';
-                    if (icon) icon.textContent = '➕';
-                }
-            } catch (e) { alert('Erro: ' + e.message); }
         }
 
         async function carregarAssuntos() {
@@ -799,6 +563,14 @@
 
             if (startParam) document.getElementById('filter-start-date').value = startParam;
             if (endParam) document.getElementById('filter-end-date').value = endParam;
+            if (!startParam && !endParam) {
+                const now = new Date();
+                const offset = now.getTimezoneOffset();
+                const local = new Date(now.getTime() - (offset * 60 * 1000));
+                const iso = local.toISOString().split('T')[0];
+                document.getElementById('filter-start-date').value = iso;
+                document.getElementById('filter-end-date').value = iso;
+            }
             if (tipoParam) document.getElementById('filter-tipo').value = tipoParam;
             if (assuntoParam) document.getElementById('filter-assunto').value = assuntoParam;
             if (ativoParam) document.getElementById('filter-ativo').value = ativoParam;
@@ -810,11 +582,6 @@
 
             // Set approver after loading options
             if (aprovadorParam) document.getElementById('filter-aprovador').value = aprovadorParam;
-            
-            // Só dispara a busca se houver algum filtro ativo
-            if (startParam || endParam || kpiParam || tipoParam || assuntoParam || ativoParam || aprovadorParam) {
-                carregarChamados();
-            }
             
             applyInitialSettings();
             carregarKanban();
