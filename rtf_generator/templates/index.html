@@ -14,7 +14,7 @@
             <div style="display: flex; align-items: center; gap: 15px;">
                 <h1 id="dashboard-title" style="margin: 0; font-size: 1.5rem; color: #1a73e8; cursor: pointer;">Dashboard</h1>
                 <div style="display: flex; gap: 8px;">
-                    <a href="/chamados" class="btn-icon" title="Filtrar Chamados" style="background: #1a73e8; color: white; border: none; width: 32px; height: 32px; border-radius: 6px;">
+                    <a href="/chamados" class="btn-icon" title="Filtrar Chamados" style="background: #1a73e8; color: white; border: none; width: 32px; height: 32px; border-radius: 6px; cursor: pointer;">
                         <i class="fas fa-search"></i>
                     </a>
                     <button id="btn-print" class="btn-icon" title="Imprimir" onclick="handlePrintClick(event)" style="background: #5f6368; color: white; border: none; width: 32px; height: 32px; border-radius: 6px; cursor: pointer;">
@@ -420,11 +420,14 @@
                             const s = data.fluxo_etapas[step];
                             const duration = s.duracao_proxima ? `<div class="step-duration">${s.duracao_proxima}</div>` : '';
                             const statusClass = s.status === 'completed' ? 'active' : (s.status === 'skipped' ? 'skipped' : '');
+                            const hora = s.hora || '';
+                            const usuario = s.usuario || '';
                             
                             return `<div class="flow-step ${statusClass}">
                                 <div class="step-icon">${i+1}</div>
                                 <span class="step-label">${l}</span>
-                                <span class="step-date">${s.data || ''}</span>
+                                <span class="step-date">${(s.data || '')}${hora ? ' ' + hora : ''}</span>
+                                ${usuario ? `<span class="step-date" style="font-weight:600;">${usuario}</span>` : ``}
                                 ${duration}
                             </div>`;
                         }).join('')}
@@ -442,7 +445,7 @@
                                 <strong>📜 Histórico ERP:</strong>
                                 ${data.comentarios_erp.map(c => `
                                     <div class="comment-bubble ${c.destacar ? 'highlight' : ''}">
-                                        <div class="comment-meta"><span>👤 ${c.usuario}</span><span>📅 ${c.data}</span></div>
+                                        <div class="comment-meta"><span>👤 ${c.usuario}</span><span>📅 ${c.data} ${c.hora || ''}</span></div>
                                         <div style="font-size:0.9rem;">${c.texto}</div>
                                     </div>`).join('')}
                             </div>

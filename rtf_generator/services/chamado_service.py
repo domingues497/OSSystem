@@ -63,22 +63,77 @@ class ChamadoService:
         
         # 5. Analisar Fluxo (Lógica extraída do app.py)
         dt_abertura = erp_to_datetime(erp_data['data_cad'], erp_data.get('hora_cad'))
+        hora_abertura = format_erp_time(erp_data.get('hora_cad'))
+        usuario_abertura = erp_data.get('criador') or erp_data.get('solicitante') or ''
         fluxo = {
-            "abertura": {"status": "completed", "data": erp_data['data_cad_fmt'], "dt": dt_abertura},
-            "primeiro_atendimento": {"status": "pending", "data": "", "dt": None},
-            "autorizacao_gerencia": {"status": "pending", "data": "", "dt": None},
-            "aprovado_andamento": {"status": "pending", "data": "", "dt": None},
-            "finalizacao": {"status": "pending", "data": "", "dt": None},
-            "encerramento": {"status": "pending", "data": "", "dt": None}
+            "abertura": {"status": "completed", "data": erp_data['data_cad_fmt'], "hora": hora_abertura, "usuario": usuario_abertura, "dt": dt_abertura},
+            "primeiro_atendimento": {"status": "pending", "data": "", "hora": "", "usuario": "", "dt": None},
+            "autorizacao_gerencia": {"status": "pending", "data": "", "hora": "", "usuario": "", "dt": None},
+            "aprovado_andamento": {"status": "pending", "data": "", "hora": "", "usuario": "", "dt": None},
+            "finalizacao": {"status": "pending", "data": "", "hora": "", "usuario": "", "dt": None},
+            "encerramento": {"status": "pending", "data": "", "hora": "", "usuario": "", "dt": None}
         }
 
         # Primeiro Atendimento oficial
         if erp_data.get('data_inic_atend') and int(erp_data['data_inic_atend']) > 0:
             dt_inic = erp_to_datetime(erp_data['data_inic_atend'], erp_data.get('hora_inic_atend'))
-            fluxo["primeiro_atendimento"] = {"status": "completed", "data": format_erp_date(erp_data['data_inic_atend']), "dt": dt_inic}
+            fluxo["primeiro_atendimento"] = {"status": "completed", "data": format_erp_date(erp_data['data_inic_atend']), "hora": format_erp_time(erp_data.get('hora_inic_atend')), "usuario": "", "dt": dt_inic}
 
         foi_aprovado = False
         comentarios_fmt = []
+        user_cache = {}
+        
+        def _norm(s):
+            return " ".join((s or "").replace("\r", " ").replace("\n", " ").split()).strip()
+
+        def _extract_after(text, marker):
+            t = _norm(text)
+            idx = t.lower().find(marker.lower())
+            if idx < 0:
+                return ""
+            return t[idx + len(marker):].strip()
+
+        def _cut_before_any(s, needles):
+            low = s.lower()
+            best = None
+            for n in needles:
+                i = low.find(n.lower())
+                if i >= 0:
+                    best = i if best is None else min(best, i)
+            out = s[:best].strip() if best is not None else s.strip()
+            return out.rstrip(" .,-")
+
+        def _extract_actor_from_text(text):
+            if not text:
+                return ""
+            t = _norm(text)
+            low = t.lower()
+
+            if "solicitação aprovada por" in low or "solicitacao aprovada por" in low:
+                tail = _extract_after(t, "Solicitação aprovada por")
+                if not tail:
+                    tail = _extract_after(t, "Solicitacao aprovada por")
+                return _cut_before_any(tail, ["Solicitação atualizada", "Solicitacao atualizada", "Aguardando", "Mensagem do"])
+
+            if "solicitação finalizada por" in low or "solicitacao finalizada por" in low:
+                tail = _extract_after(t, "Solicitação finalizada por")
+                if not tail:
+                    tail = _extract_after(t, "Solicitacao finalizada por")
+                return _cut_before_any(tail, ["Aguardando", "Mensagem do"])
+
+            if "solicitação encerrada por" in low or "solicitacao encerrada por" in low:
+                tail = _extract_after(t, "Solicitação encerrada por")
+                if not tail:
+                    tail = _extract_after(t, "Solicitacao encerrada por")
+                return _cut_before_any(tail, ["Mensagem do"])
+
+            if "aprovado por:" in low or "aprovada por:" in low:
+                tail = _extract_after(t, "Aprovado por:")
+                if not tail:
+                    tail = _extract_after(t, "Aprovada por:")
+                return _cut_before_any(tail, ["Data", "Data/hora"])
+
+            return ""
         
         # Ordenar comentários para análise de fluxo (ASC para cronologia)
         comms_asc = sorted(comentarios, key=lambda r: (r['data_grav'], r['hora_grav']))
@@ -89,6 +144,15 @@ class ChamadoService:
             txt_upper = txt_content.upper()
             dt_fmt = format_erp_date(row['data_grav'])
             dt_obj = erp_to_datetime(row['data_grav'], row['hora_grav'])
+            hora_evt = format_erp_time(row.get('hora_grav'))
+            cod_usuario = row.get('cod_usuario')
+            u_name = ""
+            if cod_usuario and int(cod_usuario) > 0:
+                if int(cod_usuario) in user_cache:
+                    u_name = user_cache[int(cod_usuario)]
+                else:
+                    u_name = self.erp_repo.buscar_usuario_por_id(cod_usuario)
+                    user_cache[int(cod_usuario)] = u_name
             
             is_system_auth = "SOLICITAÇÃO DE AUTORIZAÇÃO" in txt_upper
             is_system_status_change = "SOLICITAÇÃO ATUALIZADA PARA O STATUS" in txt_upper
@@ -96,54 +160,70 @@ class ChamadoService:
 
             # Etapa 2: Primeiro Atendimento via comentário (fallback)
             if fluxo["primeiro_atendimento"]["status"] == "pending" and not is_system_msg:
-                fluxo["primeiro_atendimento"] = {"status": "completed", "data": dt_fmt, "dt": dt_obj}
+                fluxo["primeiro_atendimento"] = {"status": "completed", "data": dt_fmt, "hora": hora_evt, "usuario": u_name, "dt": dt_obj}
+            elif fluxo["primeiro_atendimento"]["status"] == "completed" and not is_system_msg and not fluxo["primeiro_atendimento"].get("usuario"):
+                fluxo["primeiro_atendimento"]["usuario"] = u_name
             
             # Etapa 3: Autorização da Gerência
             if ("SOLICITAÇÃO DE AUTORIZAÇÃO" in txt_upper and "FOI APROVADA" in txt_upper) or ("AUTORIZAÇÃO" in txt_upper and "APROVADA" in txt_upper):
                 if fluxo["autorizacao_gerencia"]["status"] == "pending":
-                    fluxo["autorizacao_gerencia"] = {"status": "completed", "data": dt_fmt, "dt": dt_obj}
+                    actor = _extract_actor_from_text(txt_content)
+                    fluxo["autorizacao_gerencia"] = {"status": "completed", "data": dt_fmt, "hora": hora_evt, "usuario": actor, "dt": dt_obj}
             
             # Etapa 4: Aprovado e em Andamento
             if ("SOLICITAÇÃO APROVADA POR" in txt_upper) or ("SOLICITAÇÃO ATUALIZADA PARA O STATUS: ANDAMENTO" in txt_upper) or ("SOLICITAÇÃO ATUALIZADA PARA O STATUS: EA" in txt_upper):
                 if fluxo["aprovado_andamento"]["status"] == "pending":
                     foi_aprovado = True
-                    fluxo["aprovado_andamento"] = {"status": "completed", "data": dt_fmt, "dt": dt_obj}
+                    actor = _extract_actor_from_text(txt_content)
+                    fluxo["aprovado_andamento"] = {"status": "completed", "data": dt_fmt, "hora": hora_evt, "usuario": actor, "dt": dt_obj}
             
             # Etapa 5: Finalização via comentário (fallback)
-            if ("FINALIZAD" in txt_upper or "CONCLUÍD" in txt_upper or "SOLUCIONAD" in txt_upper or "RESOLVID" in txt_upper):
+            if (("SOLICITAÇÃO FINALIZADA" in txt_upper) or ("SOLICITACAO FINALIZADA" in txt_upper) or (("SOLICIT" in txt_upper) and ("FINALIZAD" in txt_upper) and ("ENCERRAD" not in txt_upper))):
                 if fluxo["finalizacao"]["status"] == "pending":
-                    fluxo["finalizacao"] = {"status": "completed", "data": dt_fmt, "dt": dt_obj}
+                    actor = _extract_actor_from_text(txt_content)
+                    fluxo["finalizacao"] = {"status": "completed", "data": dt_fmt, "hora": hora_evt, "usuario": actor, "dt": dt_obj}
             
             # Etapa 6: Encerramento via comentário (prioridade sobre DATA_BAIXA quando diverge)
             if "ENCERRAD" in txt_upper and "SOLICIT" in txt_upper:
                 if fluxo["encerramento"]["status"] == "pending":
-                    fluxo["encerramento"] = {"status": "completed", "data": dt_fmt, "dt": dt_obj}
+                    actor = _extract_actor_from_text(txt_content)
+                    fluxo["encerramento"] = {"status": "completed", "data": dt_fmt, "hora": hora_evt, "usuario": actor, "dt": dt_obj}
 
             # Formatar comentário para exibição (reverso no final ou inserção no topo)
-            cod_usuario = row.get('cod_usuario')
             if cod_usuario and int(cod_usuario) > 0:
-                u_name = self.erp_repo.buscar_usuario_por_id(cod_usuario)
                 comentarios_fmt.insert(0, {
                     "data": dt_fmt,
-                    "hora": format_erp_time(row['hora_grav']),
+                    "hora": hora_evt,
                     "usuario": u_name,
                     "texto": txt_content,
                     "destacar": ("AUTORIZAÇÃO" in txt_upper and "APROVADA" in txt_upper) or ("SOLICITAÇÃO" in txt_upper and "APROVADA" in txt_upper)
                 })
 
-        # Finalização T.I (Status AV ou BA)
-        if erp_data['cod_status_doc'] in ['AV', 'BA']:
-            if fluxo["finalizacao"]["status"] == "pending":
-                data_fin = comentarios_fmt[0]['data'] if comentarios_fmt else erp_data['data_cad_fmt']
-                dt_fin = erp_to_datetime(erp_data.get('data_baixa'), erp_data.get('hora_baixa')) or dt_abertura
-                fluxo["finalizacao"] = {"status": "completed", "data": data_fin, "dt": dt_fin}
+        if erp_data['cod_status_doc'] in ['AV', 'BA'] and fluxo["finalizacao"]["status"] == "pending":
+            for row in reversed(comms_asc):
+                txt_content = str(row.get('descr_acompanhante') or row.get('descr_acomp') or row.get('texto') or row.get('obs') or "")
+                txt_upper = txt_content.upper()
+                if (("SOLICITAÇÃO FINALIZADA" in txt_upper) or ("SOLICITACAO FINALIZADA" in txt_upper) or (("SOLICIT" in txt_upper) and ("FINALIZAD" in txt_upper) and ("ENCERRAD" not in txt_upper))):
+                    dt_obj = erp_to_datetime(row['data_grav'], row['hora_grav'])
+                    if not dt_obj:
+                        continue
+                    hora_evt = format_erp_time(row.get('hora_grav'))
+                    actor = _extract_actor_from_text(txt_content)
+                    fluxo["finalizacao"] = {"status": "completed", "data": format_erp_date(row['data_grav']), "hora": hora_evt, "usuario": actor, "dt": dt_obj}
+                    break
 
-        # Encerramento (Status BA)
-        if erp_data['cod_status_doc'] == 'BA':
-            if fluxo["encerramento"]["status"] == "pending":
-                data_baixa = format_erp_date(erp_data.get('data_baixa')) or erp_data['data_cad_fmt']
-                dt_baixa = erp_to_datetime(erp_data.get('data_baixa'), erp_data.get('hora_baixa')) or dt_abertura
-                fluxo["encerramento"] = {"status": "completed", "data": data_baixa, "dt": dt_baixa}
+        if erp_data['cod_status_doc'] == 'BA' and fluxo["encerramento"]["status"] == "pending":
+            for row in reversed(comms_asc):
+                txt_content = str(row.get('descr_acompanhante') or row.get('descr_acomp') or row.get('texto') or row.get('obs') or "")
+                txt_upper = txt_content.upper()
+                if ("ENCERRAD" in txt_upper) and ("SOLICIT" in txt_upper):
+                    dt_obj = erp_to_datetime(row['data_grav'], row['hora_grav'])
+                    if not dt_obj:
+                        continue
+                    hora_evt = format_erp_time(row.get('hora_grav'))
+                    actor = _extract_actor_from_text(txt_content)
+                    fluxo["encerramento"] = {"status": "completed", "data": format_erp_date(row['data_grav']), "hora": hora_evt, "usuario": actor, "dt": dt_obj}
+                    break
 
         # Calcular durações entre etapas
         keys = ["abertura", "primeiro_atendimento", "autorizacao_gerencia", "aprovado_andamento", "finalizacao", "encerramento"]
