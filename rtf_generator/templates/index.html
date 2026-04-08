@@ -177,6 +177,7 @@
         // Carregar configurações do localStorage
         let soundEnabled = localStorage.getItem('dash-sound-enabled') === 'true';
         let kpiDateOverride = localStorage.getItem('dash-kpi-date') || '';
+        let kpiDateOverrideSetDay = localStorage.getItem('dash-kpi-date-set-day') || '';
         let printClicks = 0;
         let printLast = 0;
         let printTimer = null;
@@ -655,6 +656,13 @@
                 const startInput = document.getElementById('dash-start-date');
                 if (endInput) endInput.value = getLocalDateISO(hoje);
                 if (startInput) startInput.value = getLocalDateISO(sete);
+                if (kpiDateOverride) {
+                    kpiDateOverride = '';
+                    kpiDateOverrideSetDay = '';
+                    localStorage.removeItem('dash-kpi-date');
+                    localStorage.removeItem('dash-kpi-date-set-day');
+                    updateKpiLabels();
+                }
                 carregarDashboard();
                 scheduleDateRollover();
             }, Math.max(1000, delay));
@@ -662,7 +670,9 @@
 
         function updateKpiLabels() {
             const date = kpiDateOverride;
-            const suffix = date ? ` (${date.split('-').reverse().join('/')})` : '';
+            const today = getLocalDateISO(new Date());
+            const showDate = date && date !== today;
+            const suffix = showDate ? ` (${date.split('-').reverse().join('/')})` : '';
             const labels = document.querySelectorAll('.kpi-label');
             labels.forEach(el => {
                 const base = el.dataset.baseLabel || el.textContent;
@@ -687,16 +697,36 @@
             const input = document.getElementById('kpi-date-input');
             const val = (input && input.value) ? input.value : '';
             kpiDateOverride = val;
-            if (kpiDateOverride) localStorage.setItem('dash-kpi-date', kpiDateOverride);
+            if (kpiDateOverride) {
+                kpiDateOverrideSetDay = getLocalDateISO(new Date());
+                localStorage.setItem('dash-kpi-date', kpiDateOverride);
+                localStorage.setItem('dash-kpi-date-set-day', kpiDateOverrideSetDay);
+            }
             closeKpiDateOverlay();
             carregarDashboard();
         }
 
         function clearKpiDateOverride() {
             kpiDateOverride = '';
+            kpiDateOverrideSetDay = '';
             localStorage.removeItem('dash-kpi-date');
+            localStorage.removeItem('dash-kpi-date-set-day');
             closeKpiDateOverlay();
             carregarDashboard();
+        }
+
+        function normalizeKpiDateOverride() {
+            const today = getLocalDateISO(new Date());
+            if (kpiDateOverride && kpiDateOverrideSetDay && kpiDateOverrideSetDay !== today) {
+                kpiDateOverride = '';
+                kpiDateOverrideSetDay = '';
+                localStorage.removeItem('dash-kpi-date');
+                localStorage.removeItem('dash-kpi-date-set-day');
+            } else if (kpiDateOverride && !kpiDateOverrideSetDay) {
+                kpiDateOverrideSetDay = today;
+                localStorage.setItem('dash-kpi-date-set-day', kpiDateOverrideSetDay);
+            }
+            updateKpiLabels();
         }
 
         function handlePrintClick(e) {
@@ -737,6 +767,7 @@
         const hoje = new Date(); const sete = new Date(); sete.setDate(hoje.getDate()-6);
         document.getElementById('dash-end-date').value = getLocalDateISO(hoje);
         document.getElementById('dash-start-date').value = getLocalDateISO(sete);
+        normalizeKpiDateOverride();
         applyInitialSettings();
         carregarDashboard(); setupAutoRefresh(); scheduleDateRollover(); setupHiddenProdutividadeShortcut();
     </script>

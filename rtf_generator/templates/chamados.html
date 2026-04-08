@@ -198,6 +198,8 @@
         let aguardandoOrderMode = localStorage.getItem('dash-aguardando-order') || 'cor';
         let lastKanbanData = null;
         let onlyApproved = localStorage.getItem('chamados-only-approved') === '1';
+        let aguardandoFilter = localStorage.getItem('chamados-aguardando-filter') || 'all';
+        if (!['all', 'waiting', 'approved'].includes(aguardandoFilter)) aguardandoFilter = 'all';
 
         function setupAutoRefresh() {
             if(refreshTimer) clearInterval(refreshTimer);
@@ -332,20 +334,36 @@
             if (modeIcon) modeIcon.style.color = aguardandoOrderMode === 'cor' ? '#1a73e8' : '';
             renderTodasColunas();
         }
+        
+        function toggleAguardandoFilter(mode) {
+            if (aguardandoFilter === mode) aguardandoFilter = 'all';
+            else aguardandoFilter = mode;
+            localStorage.setItem('chamados-aguardando-filter', aguardandoFilter);
+            renderTodasColunas();
+        }
 
         function renderTodasColunas() {
             if (!lastKanbanData) return;
             const cols = ['aberta', 'aguardando', 'andamento', 'avaliacao'];
             if (lastKanbanData.encerrados) cols.push('encerrados');
             cols.forEach(col => {
-                let tickets = [...lastKanbanData[col]];
+                let baseTickets = [...lastKanbanData[col]];
                 if (onlyApproved) {
-                    tickets = tickets.filter(t => {
+                    baseTickets = baseTickets.filter(t => {
                         const req = parseInt(t.auth_req_count || 0);
                         const appr = parseInt(t.auth_appr_count || 0);
                         if (req > 0) return appr >= req;
                         return !!t.auth_approved;
                     });
+                }
+                
+                let tickets = baseTickets;
+                if (col === 'aguardando') {
+                    if (aguardandoFilter === 'waiting') {
+                        tickets = baseTickets.filter(t => !!t.waiting_auth);
+                    } else if (aguardandoFilter === 'approved') {
+                        tickets = baseTickets.filter(t => !!t.auth_approved && !t.waiting_auth);
+                    }
                 }
                 tickets.sort((a, b) => {
                     if (col === 'aguardando' && aguardandoOrderMode === 'cor') {
@@ -369,30 +387,33 @@
                     const idB = parseInt(b.id);
                     return kanbanSort[col] === 'desc' ? idB - idA : idA - idB;
                 });
-                renderKanbanColumn(col, tickets);
+                renderKanbanColumn(col, tickets, baseTickets);
             });
             const encerradosCol = document.getElementById('col-encerrados');
             if (encerradosCol) encerradosCol.style.display = lastKanbanData.encerrados ? 'flex' : 'none';
         }
 
-        function renderKanbanColumn(id, tickets) {
+        function renderKanbanColumn(id, tickets, baseTickets = null) {
             const countEl = document.getElementById(`count-${id}`);
             if (id === 'aguardando') {
                 const organizer = document.getElementById('organizer-aguardando');
+                const src = baseTickets || tickets;
                 const counts = { waiting: 0, approved: 0 };
-                tickets.forEach(t => {
+                src.forEach(t => {
                     if (t.waiting_auth) counts.waiting += 1;
                     else if (t.auth_approved) counts.approved += 1;
                 });
                 if (organizer) {
-                    const chip = (label, color, count) => `
-                        <div class="organizer-chip" role="note">
+                    const chip = (label, color, count, mode, selected) => `
+                        <div class="organizer-chip" role="button" onclick="toggleAguardandoFilter('${mode}')" style="cursor:pointer; ${selected ? 'box-shadow: 0 0 0 2px rgba(26,115,232,0.35);' : ''}">
                             <span class="organizer-dot" style="background:${color}"></span>
                             <span class="organizer-label">${label}</span>
                             <span class="organizer-count">${count}</span>
                         </div>
                     `;
-                    organizer.innerHTML = chip('Autorização', '#ef5350', counts.waiting) + chip('Aprovado', '#34a853', counts.approved);
+                    organizer.innerHTML =
+                        chip('Autorização', '#ef5350', counts.waiting, 'waiting', aguardandoFilter === 'waiting') +
+                        chip('Aprovado', '#34a853', counts.approved, 'approved', aguardandoFilter === 'approved');
                 }
             }
             if (countEl) countEl.textContent = tickets.length;
@@ -423,11 +444,14 @@
                 const authColor = !showAuth ? '' : (authOk ? '#1e8e3e' : '#c62828');
                 const authBorder = !showAuth ? '' : (authOk ? '#c8e6c9' : '#ffcdd2');
                 
+                const dataCad = String(t.data_cad || '');
+                const dataAbertura = dataCad.length === 8 ? `${dataCad.slice(6,8)}/${dataCad.slice(4,6)}` : '';
+                
                 return `
                     <div class="${cardClass}" onclick="openDetails('${t.id}')">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
                             <span style="font-weight: bold; color: #333;">
-                                #${t.id} ${t.has_note ? '📝' : ''}
+                                #${t.id}${dataAbertura ? ` <span style="font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; background: #f1f3f4; color: #5f6368; border: 1px solid #dadce0; font-weight: bold;">${dataAbertura}</span>` : ''} ${t.has_note ? '📝' : ''}
                             </span>
                             <div style="display:flex; align-items:center; gap:6px;">
                                 ${showAuth ? `<span title="Aprovação gerência (aprovado/solicitado)" style="font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; background: ${authBg}; color: ${authColor}; border: 1px solid ${authBorder}; font-weight: bold;">
