@@ -1,10 +1,11 @@
-from flask import Flask
+from flask import Flask, request
 from config import Config
 from routes.erp_routes import erp_bp
 from routes.local_routes import local_bp
 from routes.notify_routes import notify_bp
 from routes.web_routes import web_bp
 from database.local_connection import init_local_db
+from repositories.local_access_repository import LocalAccessRepository
 import os
 import logging
 
@@ -22,6 +23,20 @@ def create_app():
     
     # Inicializar banco local
     init_local_db(app.config['LOCAL_DB'])
+    access_repo = LocalAccessRepository(app.config['LOCAL_DB'])
+
+    @app.before_request
+    def _track_access():
+        try:
+            p = request.path or ""
+            if p.startswith("/static/") or p == "/favicon.ico":
+                return
+            xff = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+            ip = xff or (request.remote_addr or "")
+            ua = request.headers.get("User-Agent") or ""
+            access_repo.track(ip=ip, path=p, user_agent=ua)
+        except Exception:
+            return
 
     # Registrar Blueprints
     app.register_blueprint(web_bp)

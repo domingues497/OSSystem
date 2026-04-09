@@ -4,6 +4,7 @@ from datetime import datetime
 
 from repositories.erp_repository import ERPRepository
 from repositories.local_alert_repository import LocalAlertRepository
+from repositories.local_access_repository import LocalAccessRepository
 from services.telegram_service import TelegramService
 from config import Config
 from utils.datetime_utils import erp_to_datetime, add_business_minutes, business_minutes_between
@@ -190,5 +191,71 @@ def notify_opened_tickets():
         if dry_run:
             return jsonify({"dry_run": True, "window_minutes": window_minutes, "candidates": candidates})
         return jsonify({"sent": sent})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@notify_bp.route('/access_report', methods=['POST'])
+def notify_access_report():
+    try:
+        tg_targets = [t.strip() for t in (os.getenv("TELEGRAM_CHAT_IDS", "") or "").split(",") if t.strip()]
+        has_tg = bool(os.getenv("TELEGRAM_BOT_TOKEN")) and bool(tg_targets)
+        force = str(request.args.get('force', '')).strip().lower() in {'1', 'true', 'yes'}
+        dry_run = str(request.args.get('dry_run', '')).strip().lower() in {'1', 'true', 'yes'}
+        date_str = (request.args.get('date') or '').strip()
+        if not dry_run and not has_tg:
+            return jsonify({"error": "Configure TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_IDS"}), 400
+
+        now = datetime.now()
+        if date_str:
+            try:
+                day_dt = datetime.strptime(date_str, '%Y-%m-%d')
+            except Exception:
+                return jsonify({"error": "date inválida (use YYYY-MM-DD)"}), 400
+        else:
+            day_dt = now
+            if not force:
+                if (now.hour < 18) or (now.hour == 18 and now.minute < 30):
+                    return jsonify({"error": "Aguarde 18:30 ou use force=1"}), 400
+
+        day_erp = int(day_dt.strftime('%Y%m%d'))
+        alert_key = f"access_report_{day_erp}"
+
+        alerts = LocalAlertRepository(Config.LOCAL_DB)
+        access_repo = LocalAccessRepository(Config.LOCAL_DB)
+        tg = TelegramService()
+
+        if (not force) and alerts.was_sent(0, alert_key):
+            return jsonify({"already_sent": True, "day_erp": day_erp})
+
+        items = access_repo.get_day(day_erp)
+        uniq = len(items)
+        total = sum(i.get("count", 0) for i in items)
+
+        d_label = day_dt.strftime('%d/%m/%Y')
+        lines = [f"Acessos ({d_label})", f"IPs únicos: {uniq} | Requisições: {total}"]
+
+        max_ips = 60
+        for i, it in enumerate(items[:max_ips]):
+            ip = it.get("ip", "")
+            cnt = it.get("count", 0)
+            last_seen = (it.get("last_seen") or "")
+            last_hhmm = last_seen[11:16] if len(last_seen) >= 16 else ""
+            lines.append(f"- {ip} ({cnt}) {last_hhmm}".rstrip())
+        if uniq > max_ips:
+            lines.append(f"... +{uniq - max_ips} IPs")
+
+        msg = "\n".join(lines)
+        if dry_run:
+            return jsonify({"dry_run": True, "day_erp": day_erp, "unique_ips": uniq, "total_requests": total, "message": msg})
+
+        ok = False
+        for chat_id in tg_targets:
+            if tg.send(chat_id, msg):
+                ok = True
+        if ok:
+            alerts.mark_sent(0, alert_key)
+            return jsonify({"sent": True, "day_erp": day_erp, "unique_ips": uniq, "total_requests": total})
+        return jsonify({"sent": False, "error": "Falha ao enviar Telegram"}), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500

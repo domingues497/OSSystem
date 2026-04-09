@@ -99,6 +99,20 @@ curl -I http://127.0.0.1:8000/
 curl -I http://localhost/
 ```
 
+## 7.1) Relatório diário de IPs (Telegram)
+
+Para enviar 1 vez ao dia (18:30) um resumo dos IPs que acessaram o sistema no dia, configure um cron no servidor:
+
+```bash
+crontab -e
+```
+
+Adicionar:
+
+```bash
+30 18 * * * curl -s -X POST http://127.0.0.1:8000/api/notify/access_report >/dev/null 2>&1
+```
+
 ## 8) Atualização (deploy de novas versões)
 
 ```bash

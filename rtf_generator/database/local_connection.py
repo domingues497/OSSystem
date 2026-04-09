@@ -25,5 +25,18 @@ def init_local_db(db_path):
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS access_daily (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            day_erp INTEGER NOT NULL,
+            ip TEXT NOT NULL,
+            count INTEGER NOT NULL DEFAULT 0,
+            first_seen TEXT,
+            last_seen TEXT,
+            last_path TEXT,
+            user_agent TEXT,
+            UNIQUE(day_erp, ip)
+        )
+    """)
     conn.commit()
     conn.close()
