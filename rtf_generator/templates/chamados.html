@@ -11,7 +11,7 @@
     <div class="container">
         <div class="dashboard-header" style="margin-bottom: 1.5rem; border-bottom: 1px solid #eee; padding-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
             <div style="display: flex; align-items: center; gap: 15px;">
-                <h1 style="margin: 0; font-size: 1.5rem; color: #1a73e8;"><i class="fas fa-search"></i> Chamados</h1>
+                <h1 id="chamados-title" style="margin: 0; font-size: 1.5rem; color: #1a73e8; cursor: pointer;"><i class="fas fa-search"></i> Chamados</h1>
                 <div style="display: flex; gap: 8px;">
                     <a href="/" class="btn-icon" title="Dashboard" style="background: #1a73e8; color: white; border: none; width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; text-decoration: none;">
                         <i class="fas fa-chart-line"></i>
@@ -39,11 +39,11 @@
         <div class="filters-grid">
             <div class="filter-group">
                 <label class="filter-label">ID:</label>
-                <input type="text" id="filter-id" class="filter-input" placeholder="Ex: 81340">
+                <input type="text" id="filter-id" class="filter-input" placeholder="Ex: 81340" maxlength="6" style="width: 7ch; padding: 8px;">
             </div>
             <div class="filter-group">
                 <label class="filter-label">Solicitante:</label>
-                <input type="text" id="filter-solicitante" class="filter-input" placeholder="Nome...">
+                <input type="text" id="filter-solicitante" class="filter-input" placeholder="Nome..." style="width: 12ch; padding: 8px;">
             </div>
             <div class="filter-group">
                 <label class="filter-label">Ultimo Tec:</label>
@@ -53,12 +53,18 @@
             </div>
             <div class="filter-group">
                 <label class="filter-label">Início:</label>
-                <input type="date" id="filter-start-date" class="filter-input" style="padding: 8px;">
+                <input type="date" id="filter-start-date" class="filter-input" style="padding: 8px; width: 10.5ch;">
             </div>
             <div class="filter-group">
                 <label class="filter-label">Fim:</label>
-                <input type="date" id="filter-end-date" class="filter-input" style="padding: 8px;">
+                <input type="date" id="filter-end-date" class="filter-input" style="padding: 8px; width: 10.5ch;">
             </div>
+            <div class="filter-group">
+                <label class="filter-label">Conteúdo:</label>
+                <input type="text" id="filter-conteudo" class="filter-input" placeholder="Texto..." style="width: 18ch; padding: 8px;">
+            </div>
+            <input type="hidden" id="filter-executor">
+            <input type="hidden" id="filter-etapa">
             <div class="filter-group">
                 <label class="filter-label">Tipo:</label>
                 <select id="filter-tipo" class="filter-input" style="padding: 8px;" onchange="carregarAssuntos(); carregarAtivos(); carregarKanban();">
@@ -70,9 +76,12 @@
             </div>
             <div class="filter-group">
                 <label class="filter-label">Assunto:</label>
-                <select id="filter-assunto" class="filter-input" style="padding: 8px;" onchange="carregarAtivos(); carregarKanban();">
-                    <option value="">Todos</option>
-                </select>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <input type="text" id="filter-assunto-q" class="filter-input" placeholder="Buscar..." style="padding: 8px; width: 12ch;">
+                    <select id="filter-assunto" class="filter-input" style="padding: 8px; width: 18ch;" onchange="carregarAtivos(); carregarKanban();">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
             </div>
             <div class="filter-group">
                 <label class="filter-label">Ativo:</label>
@@ -81,14 +90,14 @@
                 </select>
             </div>
             <div class="filter-group filter-actions">
-                <button type="button" class="btn btn-filter" onclick="carregarKanban();" style="padding: 6px 10px; font-size: 0.8rem;">
-                    <i class="fas fa-filter"></i> Filtrar
+                <button type="button" class="btn btn-filter" onclick="carregarKanban();" title="Filtrar" style="padding: 8px 10px; font-size: 0; width: 40px; justify-content: center;">
+                    <i class="fas fa-filter" style="font-size: 0.9rem;"></i>
                 </button>
-                <button type="button" class="btn btn-filter btn-secondary" onclick="limparFiltros()" style="padding: 6px 10px; font-size: 0.8rem;">
-                    <i class="fas fa-eraser"></i> Limpar
+                <button type="button" class="btn btn-filter btn-secondary" onclick="limparFiltros()" title="Limpar" style="padding: 8px 10px; font-size: 0; width: 40px; justify-content: center;">
+                    <i class="fas fa-eraser" style="font-size: 0.9rem;"></i>
                 </button>
-                <button type="button" class="btn btn-filter" id="btn-only-approved" onclick="toggleOnlyApproved()" style="padding: 6px 10px; font-size: 0.8rem; background: #1e8e3e; color: white; border: none;">
-                    <i class="fas fa-check"></i> Aprovados
+                <button type="button" class="btn btn-filter" id="btn-only-approved" onclick="toggleOnlyApproved()" title="Aprovados" style="padding: 8px 10px; font-size: 0; width: 40px; justify-content: center; background: #1e8e3e; color: white; border: none;">
+                    <i class="fas fa-check" style="font-size: 0.9rem;"></i>
                 </button>
             </div>
         </div>
@@ -96,6 +105,42 @@
         <div id="loading" class="loading-overlay" style="display:none;">
             <img src="/static/img/logo-capal.png" class="loading-logo" alt="CAPAL">
             <span>Atualizando...</span>
+        </div>
+
+        <div id="advanced-filter-overlay" style="display:none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 9999; align-items: center; justify-content: center;">
+            <div style="background: #fff; border-radius: 10px; padding: 16px; width: 360px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+                <div style="display:flex; align-items:center; justify-content: space-between; margin-bottom: 10px;">
+                    <strong>Filtro Avançado</strong>
+                    <button type="button" onclick="closeAdvancedFilters()" style="border: none; background: transparent; font-size: 18px; cursor: pointer;">×</button>
+                </div>
+                <div style="display:flex; flex-direction:column; gap: 10px;">
+                    <div>
+                        <div style="font-size: 0.8rem; color:#555; font-weight: 600; margin-bottom: 6px;">Executor</div>
+                        <input type="text" id="adv-executor" class="filter-input" placeholder="Ex: RAFAEL D" style="padding: 8px;">
+                    </div>
+                    <div>
+                        <div style="font-size: 0.8rem; color:#555; font-weight: 600; margin-bottom: 6px;">Etapa</div>
+                        <select id="adv-etapa" class="filter-input" style="padding: 8px;">
+                            <option value="">Qualquer</option>
+                            <option value="aprovado">Aprovado</option>
+                            <option value="finalizado">Finalizado</option>
+                            <option value="encerrado">Encerrado</option>
+                            <option value="comentou">Comentou</option>
+                        </select>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.8rem; color:#555; font-weight: 600; margin-bottom: 6px;">Solicitante</div>
+                        <input type="text" id="adv-solicitante" class="filter-input" placeholder="Ex: ANDREIA A" style="padding: 8px;">
+                    </div>
+                </div>
+                <div style="display:flex; gap: 8px; margin-top: 12px;">
+                    <button type="button" onclick="applyAdvancedFilters()" style="flex:1; padding: 8px 10px; border-radius: 6px; border: none; background: #1a73e8; color: #fff; font-weight: 600; cursor: pointer;">Aplicar</button>
+                    <button type="button" onclick="clearAdvancedFilters()" style="flex:1; padding: 8px 10px; border-radius: 6px; border: 1px solid #ddd; background: #fff; color: #444; font-weight: 600; cursor: pointer;">Limpar</button>
+                </div>
+                <div style="margin-top: 10px; font-size: 0.75rem; color:#666;">
+                    Atalho: clique 5x em “Chamados”.
+                </div>
+            </div>
         </div>
 
         <!-- Visualização em Quadro Kanban -->
@@ -186,6 +231,7 @@
         let refreshTimer = null;
         let hasLoadedKanban = false;
         let kanbanRequestId = 0;
+        let filterDebounceTimer = null;
         
         // Configurações do Kanban
         let kanbanSort = {
@@ -252,6 +298,117 @@
             renderTodasColunas();
         }
 
+        function scheduleFilterRefresh() {
+            if (filterDebounceTimer) clearTimeout(filterDebounceTimer);
+            filterDebounceTimer = setTimeout(() => {
+                carregarKanban();
+            }, 400);
+        }
+
+        function setupEnterToFilter() {
+            document.querySelectorAll('.filters-grid input.filter-input').forEach(el => {
+                el.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        carregarKanban();
+                    }
+                });
+            });
+        }
+        
+        function setupLiveFilters() {
+            ['filter-id', 'filter-solicitante', 'filter-assunto-q', 'filter-conteudo'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.addEventListener('input', () => {
+                    scheduleFilterRefresh();
+                });
+            });
+        }
+
+        function openAdvancedFilters() {
+            const overlay = document.getElementById('advanced-filter-overlay');
+            const advExec = document.getElementById('adv-executor');
+            const advEtapa = document.getElementById('adv-etapa');
+            const advSol = document.getElementById('adv-solicitante');
+            const hExec = document.getElementById('filter-executor');
+            const hEtapa = document.getElementById('filter-etapa');
+            const sol = document.getElementById('filter-solicitante');
+            if (advExec && hExec) advExec.value = hExec.value || '';
+            if (advEtapa && hEtapa) advEtapa.value = hEtapa.value || '';
+            if (advSol && sol) advSol.value = sol.value || '';
+            if (overlay) overlay.style.display = 'flex';
+        }
+
+        function closeAdvancedFilters() {
+            const overlay = document.getElementById('advanced-filter-overlay');
+            if (overlay) overlay.style.display = 'none';
+        }
+
+        function applyAdvancedFilters() {
+            const advExec = document.getElementById('adv-executor');
+            const advEtapa = document.getElementById('adv-etapa');
+            const advSol = document.getElementById('adv-solicitante');
+            const hExec = document.getElementById('filter-executor');
+            const hEtapa = document.getElementById('filter-etapa');
+            const sol = document.getElementById('filter-solicitante');
+            if (hExec) hExec.value = (advExec && advExec.value) ? advExec.value : '';
+            if (hEtapa) hEtapa.value = (advEtapa && advEtapa.value) ? advEtapa.value : '';
+            if (sol) sol.value = (advSol && advSol.value) ? advSol.value : sol.value;
+
+            try {
+                const url = new URL(window.location.href);
+                if (hExec && hExec.value) url.searchParams.set('executor', hExec.value);
+                else url.searchParams.delete('executor');
+                if (hEtapa && hEtapa.value) url.searchParams.set('etapa', hEtapa.value);
+                else url.searchParams.delete('etapa');
+                window.history.replaceState({}, '', url.toString());
+            } catch (e) {}
+
+            closeAdvancedFilters();
+            carregarKanban();
+        }
+
+        function clearAdvancedFilters() {
+            const advExec = document.getElementById('adv-executor');
+            const advEtapa = document.getElementById('adv-etapa');
+            const advSol = document.getElementById('adv-solicitante');
+            const hExec = document.getElementById('filter-executor');
+            const hEtapa = document.getElementById('filter-etapa');
+            if (advExec) advExec.value = '';
+            if (advEtapa) advEtapa.value = '';
+            if (advSol) advSol.value = '';
+            if (hExec) hExec.value = '';
+            if (hEtapa) hEtapa.value = '';
+
+            try {
+                const url = new URL(window.location.href);
+                url.searchParams.delete('executor');
+                url.searchParams.delete('etapa');
+                window.history.replaceState({}, '', url.toString());
+            } catch (e) {}
+
+            closeAdvancedFilters();
+            carregarKanban();
+        }
+
+        function setupHiddenAdvancedFilterShortcut() {
+            const el = document.getElementById('chamados-title');
+            if (!el) return;
+            let clicks = 0;
+            let last = 0;
+            el.addEventListener('click', () => {
+                const now = Date.now();
+                if (now - last > 1200) clicks = 0;
+                last = now;
+                clicks += 1;
+                if (clicks >= 5) {
+                    clicks = 0;
+                    openAdvancedFilters();
+                }
+            });
+        }
+
         function limparFiltros() {
             const ids = [
                 'filter-id',
@@ -259,6 +416,9 @@
                 'filter-aprovador',
                 'filter-start-date',
                 'filter-end-date',
+                'filter-conteudo',
+                'filter-executor',
+                'filter-etapa',
                 'filter-tipo',
                 'filter-assunto',
                 'filter-ativo'
@@ -273,7 +433,9 @@
                 }
             });
             try {
-                window.history.replaceState({}, '', '/chamados');
+                const url = new URL(window.location.href);
+                ['kpi','status','tipo','assunto','ativo','aprovador','start_date','end_date','executor','etapa','q','assunto_q'].forEach(k => url.searchParams.delete(k));
+                window.history.replaceState({}, '', url.toString());
             } catch (e) {}
             carregarAssuntos();
             carregarAtivos();
@@ -293,6 +455,10 @@
             const fEnd = document.getElementById('filter-end-date').value;
             const fTipo = document.getElementById('filter-tipo').value;
             const fAssunto = document.getElementById('filter-assunto').value;
+            const fAssuntoQ = document.getElementById('filter-assunto-q').value;
+            const fConteudo = document.getElementById('filter-conteudo').value;
+            const fExecutor = document.getElementById('filter-executor').value;
+            const fEtapa = document.getElementById('filter-etapa').value;
             const fAtivo = document.getElementById('filter-ativo').value;
             const fAprovador = document.getElementById('filter-aprovador').value;
             const urlParams = new URLSearchParams(window.location.search);
@@ -300,7 +466,7 @@
             const status = urlParams.get('status');
             
             try {
-                let url = `/api/erp/kanban?id=${fId}&solicitante=${fSol}&start_date=${fStart}&end_date=${fEnd}&tipo=${fTipo}&assunto=${fAssunto}&ativo=${fAtivo}&aprovador=${encodeURIComponent(fAprovador)}`;
+                let url = `/api/erp/kanban?id=${fId}&solicitante=${fSol}&start_date=${fStart}&end_date=${fEnd}&tipo=${fTipo}&assunto=${fAssunto}&assunto_q=${encodeURIComponent(fAssuntoQ || '')}&q=${encodeURIComponent(fConteudo || '')}&executor=${encodeURIComponent(fExecutor || '')}&etapa=${encodeURIComponent(fEtapa || '')}&ativo=${fAtivo}&aprovador=${encodeURIComponent(fAprovador)}`;
                 if (kpi) url += `&kpi=${encodeURIComponent(kpi)}`;
                 if (status) url += `&status=${encodeURIComponent(status)}`;
                 const response = await fetch(url);
@@ -619,20 +785,34 @@
             const assuntoParam = urlParams.get('assunto');
             const ativoParam = urlParams.get('ativo');
             const aprovadorParam = urlParams.get('aprovador');
+            const qParam = urlParams.get('q');
+            const execParam = urlParams.get('executor');
+            const etapaParam = urlParams.get('etapa');
 
-            if (startParam) document.getElementById('filter-start-date').value = startParam;
-            if (endParam) document.getElementById('filter-end-date').value = endParam;
-            if (!startParam && !endParam) {
-                const now = new Date();
-                const offset = now.getTimezoneOffset();
-                const local = new Date(now.getTime() - (offset * 60 * 1000));
-                const iso = local.toISOString().split('T')[0];
-                document.getElementById('filter-start-date').value = iso;
-                document.getElementById('filter-end-date').value = iso;
+            const startEl = document.getElementById('filter-start-date');
+            const endEl = document.getElementById('filter-end-date');
+
+            if (startParam || endParam) {
+                if (startParam) startEl.value = startParam;
+                if (endParam) endEl.value = endParam;
+                if (startParam && !endParam) endEl.value = startParam;
+                if (!startParam && endParam) startEl.value = endParam;
+            } else {
+                startEl.value = '';
+                if (!endEl.value) {
+                    const now = new Date();
+                    const offset = now.getTimezoneOffset();
+                    const local = new Date(now.getTime() - (offset * 60 * 1000));
+                    const iso = local.toISOString().split('T')[0];
+                    endEl.value = iso;
+                }
             }
             if (tipoParam) document.getElementById('filter-tipo').value = tipoParam;
             if (assuntoParam) document.getElementById('filter-assunto').value = assuntoParam;
             if (ativoParam) document.getElementById('filter-ativo').value = ativoParam;
+            if (qParam) document.getElementById('filter-conteudo').value = qParam;
+            if (execParam) document.getElementById('filter-executor').value = execParam;
+            if (etapaParam) document.getElementById('filter-etapa').value = etapaParam;
             
             // Agora carregar os dropdowns em cascata já com os valores iniciais se houver
             await carregarAssuntos();
@@ -643,6 +823,9 @@
             if (aprovadorParam) document.getElementById('filter-aprovador').value = aprovadorParam;
             
             applyInitialSettings();
+            setupEnterToFilter();
+            setupLiveFilters();
+            setupHiddenAdvancedFilterShortcut();
             carregarKanban();
         })();
     </script>

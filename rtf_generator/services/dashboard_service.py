@@ -163,6 +163,10 @@ class DashboardService:
         f_kpi = filtros.get('kpi')
         f_tipo = filtros.get('tipo')
         f_assunto = filtros.get('assunto')
+        f_assunto_q = filtros.get('assunto_q')
+        f_q = filtros.get('q')
+        f_executor = filtros.get('executor')
+        f_etapa = filtros.get('etapa')
         f_ativo = filtros.get('ativo')
         f_aprovador = filtros.get('aprovador')
 
@@ -196,6 +200,10 @@ class DashboardService:
             "end_date": f_end,
             "kpi": f_kpi,
             "assunto": f_assunto,
+            "assunto_q": f_assunto_q,
+            "q": f_q,
+            "executor": f_executor,
+            "etapa": f_etapa,
             "ativo": f_ativo,
             "aprovador": f_aprovador,
             "status": all_statuses

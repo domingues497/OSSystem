@@ -893,6 +893,10 @@ class ERPRepository:
         end_date = filtros.get('end_date')
         kpi_type = filtros.get('kpi')
         assunto_filter = filtros.get('assunto')
+        assunto_q = filtros.get('assunto_q')
+        q_filter = filtros.get('q')
+        executor_filter = filtros.get('executor')
+        etapa_filter = (filtros.get('etapa') or '').strip().lower()
         ativo_filter = filtros.get('ativo')
         aprovador_filter = filtros.get('aprovador')
 
@@ -921,6 +925,7 @@ class ERPRepository:
                 COALESCE(AUTH.appr_count, 0) AS AUTH_APPR_COUNT
             FROM BANCO01.DM1744
             LEFT JOIN public.DS0300 ON (DS0300.COD_USUARIO = DM1744.COD_USUARIO)
+            LEFT JOIN BANCO01.DC1739 ON (DC1739.COD_ASSUNTO = DM1744.COD_ASSUNTO)
             LEFT JOIN LATERAL (
                 SELECT
                     SUM(CASE WHEN (
@@ -1088,6 +1093,9 @@ class ERPRepository:
         if assunto_filter:
             query += " AND DM1744.COD_ASSUNTO = %s"
             params.append(assunto_filter)
+        if assunto_q:
+            query += " AND UPPER(COALESCE(DC1739.DESCR_ASSUNTO, '')) LIKE %s"
+            params.append(f"%{str(assunto_q).upper()}%")
         if ativo_filter:
             if ',' in str(ativo_filter):
                 ids = ativo_filter.split(',')
@@ -1096,6 +1104,73 @@ class ERPRepository:
             else:
                 query += " AND DM1744.COD_ATIVO = %s"
                 params.append(ativo_filter)
+        if q_filter:
+            like = f"%{str(q_filter).upper()}%"
+            query += f""" AND (
+                UPPER(COALESCE(DM1744.TITULO_SOLICITACAO, '')) LIKE %s
+                OR UPPER(COALESCE(DM1744.DESCR_SOLICITACAO, '')) LIKE %s
+                OR EXISTS(
+                    SELECT 1 FROM BANCO01.DM1745 K
+                    WHERE K.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
+                      AND UPPER(K.{text_col}) LIKE %s
+                )
+            )"""
+            params.extend([like, like, like])
+        if executor_filter:
+            clean_exec = executor_filter.upper().split(" - ")[0].split(" -")[0].strip()
+            if etapa_filter in {"", "qualquer", "all"}:
+                query += f""" AND (
+                    EXISTS (
+                        SELECT 1 FROM BANCO01.DM1745 K
+                        WHERE K.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
+                          AND (
+                            UPPER(K.{text_col}) LIKE %s
+                            OR UPPER(K.{text_col}) LIKE %s
+                            OR UPPER(K.{text_col}) LIKE %s
+                          )
+                    )
+                    OR EXISTS (
+                        SELECT 1 FROM BANCO01.DM1745 K
+                        JOIN public.DS0300 U ON (U.COD_USUARIO = K.COD_USUARIO)
+                        WHERE K.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
+                          AND UPPER(U.NOME_USUARIO) LIKE %s
+                    )
+                )"""
+                params.extend([
+                    f"%APROVAD% POR {clean_exec}%",
+                    f"%FINALIZAD% POR {clean_exec}%",
+                    f"%ENCERRAD% POR {clean_exec}%",
+                    f"%{clean_exec}%",
+                ])
+            elif etapa_filter in {"aprovado", "aprovacao"}:
+                query += f""" AND EXISTS (
+                    SELECT 1 FROM BANCO01.DM1745 K
+                    WHERE K.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
+                      AND UPPER(K.{text_col}) LIKE %s
+                )"""
+                params.append(f"%APROVAD% POR {clean_exec}%")
+            elif etapa_filter in {"finalizado", "finalizacao"}:
+                query += f""" AND EXISTS (
+                    SELECT 1 FROM BANCO01.DM1745 K
+                    WHERE K.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
+                      AND UPPER(K.{text_col}) LIKE %s
+                )"""
+                params.append(f"%FINALIZAD% POR {clean_exec}%")
+            elif etapa_filter in {"encerrado", "encerramento"}:
+                query += f""" AND EXISTS (
+                    SELECT 1 FROM BANCO01.DM1745 K
+                    WHERE K.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
+                      AND UPPER(K.{text_col}) LIKE %s
+                )"""
+                params.append(f"%ENCERRAD% POR {clean_exec}%")
+            elif etapa_filter in {"comentou", "comentario", "comentários", "comentarios"}:
+                query += f""" AND EXISTS (
+                    SELECT 1 FROM BANCO01.DM1745 K
+                    JOIN public.DS0300 U ON (U.COD_USUARIO = K.COD_USUARIO)
+                    WHERE K.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
+                      AND UPPER(U.NOME_USUARIO) LIKE %s
+                )"""
+                params.append(f"%{clean_exec}%")
 
         query += " ORDER BY DM1744.DATA_CAD DESC, DM1744.COD_SOLICITACAO DESC"
 

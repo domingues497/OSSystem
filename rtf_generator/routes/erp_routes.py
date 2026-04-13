@@ -74,6 +74,10 @@ def get_kanban():
         'kpi': request.args.get('kpi'),
         'tipo': request.args.get('tipo'),
         'assunto': request.args.get('assunto'),
+        'assunto_q': request.args.get('assunto_q'),
+        'q': request.args.get('q'),
+        'executor': request.args.get('executor'),
+        'etapa': request.args.get('etapa'),
         'ativo': request.args.get('ativo'),
         'aprovador': request.args.get('aprovador')
     }
