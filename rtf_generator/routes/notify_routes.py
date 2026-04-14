@@ -268,6 +268,9 @@ def notify_access_report():
                 pass
             return jsonify({"sent": True, "unique_ips": uniq, "total_requests": total_requests})
             
-        return jsonify({"sent": False, "error": "Falha ao enviar Telegram"}), 500
+        extra = {}
+        if getattr(tg, "last_error", None):
+            extra["telegram_error"] = tg.last_error
+        return jsonify({"sent": False, "error": "Falha ao enviar Telegram", **extra}), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
