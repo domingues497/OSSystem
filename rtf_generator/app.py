@@ -34,8 +34,15 @@ def create_app():
             xff = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
             ip = xff or (request.remote_addr or "")
             ua = request.headers.get("User-Agent") or ""
-            access_repo.track(ip=ip, path=p, user_agent=ua)
-        except Exception:
+            
+            # Log de acesso em arquivo de texto
+            log_path = os.path.join(app.root_path, "access.log")
+            from datetime import datetime
+            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(f"{now_str}|{ip}|{p}|{ua}\n")
+        except Exception as e:
+            app.logger.error(f"Erro ao gravar access.log: {e}")
             return
 
     # Registrar Blueprints

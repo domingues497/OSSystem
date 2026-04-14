@@ -202,60 +202,72 @@ def notify_access_report():
         has_tg = bool(os.getenv("TELEGRAM_BOT_TOKEN")) and bool(tg_targets)
         force = str(request.args.get('force', '')).strip().lower() in {'1', 'true', 'yes'}
         dry_run = str(request.args.get('dry_run', '')).strip().lower() in {'1', 'true', 'yes'}
-        date_str = (request.args.get('date') or '').strip()
+        
         if not dry_run and not has_tg:
             return jsonify({"error": "Configure TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_IDS"}), 400
 
         now = datetime.now()
-        if date_str:
-            try:
-                day_dt = datetime.strptime(date_str, '%Y-%m-%d')
-            except Exception:
-                return jsonify({"error": "date inválida (use YYYY-MM-DD)"}), 400
-        else:
-            day_dt = now
-            if not force:
-                if (now.hour < 18) or (now.hour == 18 and now.minute < 30):
-                    return jsonify({"error": "Aguarde 18:30 ou use force=1"}), 400
+        if not force:
+            if (now.hour < 18) or (now.hour == 18 and now.minute < 30):
+                return jsonify({"error": "Aguarde 18:30 ou use force=1"}), 400
 
-        day_erp = int(day_dt.strftime('%Y%m%d'))
-        alert_key = f"access_report_{day_erp}"
+        # O log agora fica em rtf_generator/access.log
+        log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "access.log")
+        
+        if not os.path.exists(log_path):
+            return jsonify({"message": "Nenhum acesso registrado ou log já apagado"}), 200
 
-        alerts = LocalAlertRepository(Config.LOCAL_DB)
-        access_repo = LocalAccessRepository(Config.LOCAL_DB)
-        tg = TelegramService()
+        ips_data = {}
+        total_requests = 0
+        
+        with open(log_path, "r", encoding="utf-8") as f:
+            for line in f:
+                parts = line.strip().split("|")
+                if len(parts) >= 4:
+                    dt_str, ip, path, ua = parts[0], parts[1], parts[2], parts[3]
+                    if not ip: continue
+                    total_requests += 1
+                    if ip not in ips_data:
+                        ips_data[ip] = {"count": 0, "last_seen": ""}
+                    ips_data[ip]["count"] += 1
+                    ips_data[ip]["last_seen"] = dt_str
 
-        if (not force) and alerts.was_sent(0, alert_key):
-            return jsonify({"already_sent": True, "day_erp": day_erp})
+        uniq = len(ips_data)
+        if uniq == 0:
+            return jsonify({"message": "Nenhum acesso válido no log"}), 200
 
-        items = access_repo.get_day(day_erp)
-        uniq = len(items)
-        total = sum(i.get("count", 0) for i in items)
+        d_label = now.strftime('%d/%m/%Y')
+        lines = [f"Acessos ({d_label})", f"IPs únicos: {uniq} | Requisições: {total_requests}"]
 
-        d_label = day_dt.strftime('%d/%m/%Y')
-        lines = [f"Acessos ({d_label})", f"IPs únicos: {uniq} | Requisições: {total}"]
-
+        sorted_ips = sorted(ips_data.items(), key=lambda x: x[1]["count"], reverse=True)
         max_ips = 60
-        for i, it in enumerate(items[:max_ips]):
-            ip = it.get("ip", "")
-            cnt = it.get("count", 0)
-            last_seen = (it.get("last_seen") or "")
+        for ip, data in sorted_ips[:max_ips]:
+            cnt = data["count"]
+            last_seen = data["last_seen"]
             last_hhmm = last_seen[11:16] if len(last_seen) >= 16 else ""
             lines.append(f"- {ip} ({cnt}) {last_hhmm}".rstrip())
+            
         if uniq > max_ips:
             lines.append(f"... +{uniq - max_ips} IPs")
 
         msg = "\n".join(lines)
         if dry_run:
-            return jsonify({"dry_run": True, "day_erp": day_erp, "unique_ips": uniq, "total_requests": total, "message": msg})
+            return jsonify({"dry_run": True, "unique_ips": uniq, "total_requests": total_requests, "message": msg})
 
+        tg = TelegramService()
         ok = False
         for chat_id in tg_targets:
             if tg.send(chat_id, msg):
                 ok = True
+                
         if ok:
-            alerts.mark_sent(0, alert_key)
-            return jsonify({"sent": True, "day_erp": day_erp, "unique_ips": uniq, "total_requests": total})
+            # Apaga o log após o envio bem-sucedido
+            try:
+                os.remove(log_path)
+            except Exception as e:
+                pass
+            return jsonify({"sent": True, "unique_ips": uniq, "total_requests": total_requests})
+            
         return jsonify({"sent": False, "error": "Falha ao enviar Telegram"}), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
