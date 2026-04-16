@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/produtividade.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="container">
@@ -33,10 +34,226 @@
             </div>
         </div>
 
+        <div class="chart-card">
+            <div class="chart-header">
+                <div class="chart-title">Produtividade por técnico</div>
+                <div id="chart-subtitle" class="chart-subtitle"></div>
+            </div>
+            <div class="chart-body">
+                <canvas id="finalizados-chart"></canvas>
+            </div>
+        </div>
+
         <div id="content" class="prod-content"></div>
     </div>
 
     <script>
+        let finalizadosChart = null;
+        let _lastAgg = [];
+        let _lastStart = '';
+        let _lastEnd = '';
+
+        function normalizeTechName(tecnico) {
+            let t = (tecnico || '').toString();
+            t = t.replace(/\u00a0/g, ' ');
+            t = t.replace(/[–—−‐]/g, '-');
+            t = t.trim().replace(/\.+$/, '');
+            t = t.replace(/\s*-\s*/g, ' - ');
+            t = t.replace(/\s+/g, ' ').trim().toUpperCase();
+            if (t.endsWith(' TI') && !t.endsWith(' - TI')) t = t.slice(0, -3) + ' - TI';
+            t = t.replace(/\s+/g, ' ').trim();
+
+            if (!t || ['TI', 'T.I', 'T.I.', '- TI', '-TI', 'T I', 'T I.'].includes(t)) return 'NÃO IDENTIFICADO';
+
+            if (t === 'RAFAEL - TI' || t === 'RAFAEL SIMAO - TI' || (t.includes('RAFAEL') && t.includes('SIMAO'))) {
+                return 'RAFAEL SIMAO - TI';
+            }
+            if (t.includes('WECKERLIN') || /\bRAFAEL\s+W\b/.test(t)) {
+                return 'RAFAEL WECKERLIN - TI';
+            }
+            return t;
+        }
+
+        function aggregatePorTecnico(data) {
+            const byTech = {};
+            for (const day of (Array.isArray(data) ? data : [])) {
+                const tecnicos = Array.isArray(day.tecnicos) ? day.tecnicos : [];
+                for (const t of tecnicos) {
+                    const nome = normalizeTechName(t.tecnico || "---");
+                    if (!byTech[nome]) byTech[nome] = { enviados: 0, andamento: 0, finalizados: 0, total: 0 };
+                    byTech[nome].enviados += Number(t.enviados || 0) || 0;
+                    byTech[nome].andamento += Number(t.andamento || 0) || 0;
+                    byTech[nome].finalizados += Number(t.finalizados || 0) || 0;
+                    byTech[nome].total += Number(t.total || 0) || 0;
+                }
+            }
+            return Object.entries(byTech)
+                .map(([tecnico, v]) => ({ tecnico, enviados: v.enviados, andamento: v.andamento, finalizados: v.finalizados, total: v.total }))
+                .filter(x => (x.total > 0 || x.enviados > 0 || x.andamento > 0 || x.finalizados > 0) && x.tecnico !== 'NÃO IDENTIFICADO')
+                .sort((a, b) => a.tecnico.localeCompare(b.tecnico));
+        }
+
+        function sortForChart(items, metric) {
+            const priority = ['total', 'finalizados', 'andamento', 'enviados'];
+            const tieOrder = priority.filter(k => k !== metric);
+            const get = (x, k) => Number(x[k] || 0) || 0;
+            const filtered = (items || []).filter(x => get(x, metric) > 0);
+            filtered.sort((a, b) => {
+                const primary = get(b, metric) - get(a, metric);
+                if (primary !== 0) return primary;
+                for (const k of tieOrder) {
+                    const d = get(b, k) - get(a, k);
+                    if (d !== 0) return d;
+                }
+                return (a.tecnico || '').localeCompare(b.tecnico || '');
+            });
+            return filtered;
+        }
+
+        function getPrimaryMetricFromVisibility(chart) {
+            const priority = [
+                { metric: 'total', datasetIndex: 3 },
+                { metric: 'finalizados', datasetIndex: 2 },
+                { metric: 'andamento', datasetIndex: 1 },
+                { metric: 'enviados', datasetIndex: 0 }
+            ];
+            if (!chart) return 'total';
+            for (const p of priority) {
+                if (chart.isDatasetVisible(p.datasetIndex)) return p.metric;
+            }
+            return 'total';
+        }
+
+        function refreshChartFromAgg() {
+            if (!_lastAgg || !_lastAgg.length) {
+                updateFinalizadosChart([], _lastStart, _lastEnd);
+                return;
+            }
+            const metric = getPrimaryMetricFromVisibility(finalizadosChart);
+            const items = sortForChart(_lastAgg, metric);
+            updateFinalizadosChart(items, _lastStart, _lastEnd);
+        }
+
+        function updateFinalizadosChart(items, start, end) {
+            const subtitleEl = document.getElementById('chart-subtitle');
+            const canvas = document.getElementById('finalizados-chart');
+            const labels = items.map(x => x.tecnico);
+            const valuesEnv = items.map(x => x.enviados);
+            const valuesAnd = items.map(x => x.andamento);
+            const valuesFin = items.map(x => x.finalizados);
+            const valuesTot = items.map(x => x.total);
+
+            if (subtitleEl) {
+                if (start && end) subtitleEl.textContent = `${start} até ${end}`;
+                else subtitleEl.textContent = '';
+            }
+
+            if (!labels.length) {
+                if (finalizadosChart) {
+                    finalizadosChart.destroy();
+                    finalizadosChart = null;
+                }
+                return;
+            }
+
+            canvas.height = 320;
+
+            const datasetEnv = {
+                label: 'Enviados',
+                data: valuesEnv,
+                borderWidth: 0,
+                backgroundColor: '#f29900'
+            };
+
+            const datasetAnd = {
+                label: 'Em andamento',
+                data: valuesAnd,
+                borderWidth: 0,
+                backgroundColor: '#1a73e8'
+            };
+
+            const datasetFin = {
+                label: 'Finalizados',
+                data: valuesFin,
+                borderWidth: 0,
+                backgroundColor: '#a142f4'
+            };
+
+            const datasetTot = {
+                label: 'Total',
+                data: valuesTot,
+                borderWidth: 0,
+                backgroundColor: '#5f6368'
+            };
+
+            const config = {
+                type: 'bar',
+                data: { labels, datasets: [datasetEnv, datasetAnd, datasetFin, datasetTot] },
+                options: {
+                    indexAxis: 'x',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            onClick: (e, legendItem, legend) => {
+                                const chart = legend.chart;
+                                const idx = legendItem.datasetIndex;
+                                const isVisible = chart.isDatasetVisible(idx);
+                                chart.setDatasetVisibility(idx, !isVisible);
+                                chart.update();
+                                refreshChartFromAgg();
+                            }
+                        },
+                        tooltip: { enabled: true }
+                    },
+                    scales: {
+                        x: {
+                            ticks: {
+                                autoSkip: true,
+                                maxRotation: 45,
+                                minRotation: 0
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    }
+                }
+            };
+
+            if (finalizadosChart) {
+                if (!finalizadosChart.data || !Array.isArray(finalizadosChart.data.datasets) || finalizadosChart.data.datasets.length !== 4) {
+                    finalizadosChart.destroy();
+                    finalizadosChart = null;
+                }
+            }
+
+            if (finalizadosChart) {
+                const vis = [
+                    finalizadosChart.isDatasetVisible(0),
+                    finalizadosChart.isDatasetVisible(1),
+                    finalizadosChart.isDatasetVisible(2),
+                    finalizadosChart.isDatasetVisible(3)
+                ];
+                finalizadosChart.data.labels = labels;
+                finalizadosChart.data.datasets[0].data = valuesEnv;
+                finalizadosChart.data.datasets[1].data = valuesAnd;
+                finalizadosChart.data.datasets[2].data = valuesFin;
+                finalizadosChart.data.datasets[3].data = valuesTot;
+                finalizadosChart.setDatasetVisibility(0, vis[0]);
+                finalizadosChart.setDatasetVisibility(1, vis[1]);
+                finalizadosChart.setDatasetVisibility(2, vis[2]);
+                finalizadosChart.setDatasetVisibility(3, vis[3]);
+                finalizadosChart.update();
+                return;
+            }
+            finalizadosChart = new Chart(canvas.getContext('2d'), config);
+        }
+
         async function carregarProdutividade() {
             const start = document.getElementById('start-date').value;
             const end = document.getElementById('end-date').value;
@@ -53,12 +270,23 @@
                 if (!Array.isArray(data)) {
                     const msg = (data && data.error) ? data.error : 'Resposta inválida da API.';
                     content.innerHTML = `<div class="no-data" style="color: red;">Erro ao carregar dados: ${msg}</div>`;
+                    updateFinalizadosChart([], start, end);
                     return;
                 }
                 if (data.length === 0) {
                     content.innerHTML = '<div class="no-data">Nenhuma movimentação encontrada no período selecionado.</div>';
+                    _lastAgg = [];
+                    _lastStart = start;
+                    _lastEnd = end;
+                    updateFinalizadosChart([], start, end);
                     return;
                 }
+
+                _lastAgg = aggregatePorTecnico(data);
+                _lastStart = start;
+                _lastEnd = end;
+                refreshChartFromAgg();
+
                 content.innerHTML = data.map(day => {
                     const tecnicos = Array.isArray(day.tecnicos) ? day.tecnicos : [];
                     const linhas = tecnicos.map(t => `
@@ -111,6 +339,10 @@
 
             } catch (e) {
                 content.innerHTML = `<div class="no-data" style="color: red;">Erro ao carregar dados: ${e.message}</div>`;
+                _lastAgg = [];
+                _lastStart = start;
+                _lastEnd = end;
+                updateFinalizadosChart([], start, end);
             }
         }
         
@@ -137,7 +369,20 @@
         document.getElementById('end-date').value = hoje.toISOString().split('T')[0];
         document.getElementById('start-date').value = hoje.toISOString().split('T')[0];
 
+        let _dateChangeTimer = null;
+        function setupAutoReloadOnDateChange() {
+            const startEl = document.getElementById('start-date');
+            const endEl = document.getElementById('end-date');
+            const handler = () => {
+                if (_dateChangeTimer) clearTimeout(_dateChangeTimer);
+                _dateChangeTimer = setTimeout(() => carregarProdutividade(), 200);
+            };
+            if (startEl) startEl.addEventListener('change', handler);
+            if (endEl) endEl.addEventListener('change', handler);
+        }
+
         carregarProdutividade();
+        setupAutoReloadOnDateChange();
         scheduleDateRollover();
     </script>
 </body>

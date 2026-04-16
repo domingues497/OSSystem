@@ -4,9 +4,44 @@ import re
 class ProdutividadeService:
     def __init__(self, erp_repo):
         self.erp_repo = erp_repo
+        self._unknown = "NÃO IDENTIFICADO"
 
     def _normalize_spaces(self, s):
-        return " ".join((s or "").replace("\r", " ").replace("\n", " ").split()).strip()
+        s = (s or "").replace("\u00a0", " ").replace("\r", " ").replace("\n", " ")
+        return " ".join(s.split()).strip()
+
+    def _canonicalize_tecnico(self, tecnico):
+        t = self._normalize_spaces(tecnico).upper()
+        if not t:
+            return self._unknown
+
+        t = (
+            t.replace("–", "-")
+            .replace("—", "-")
+            .replace("−", "-")
+            .replace("‐", "-")
+        )
+        t = t.strip().strip(".")
+        t = re.sub(r"\s*-\s*", " - ", t)
+        if t.endswith(" TI") and not t.endswith(" - TI"):
+            t = t[:-3] + " - TI"
+        t = self._normalize_spaces(t)
+
+        if t in {"TI", "T.I", "T.I.", "- TI", "-TI", "T I", "T I."}:
+            return self._unknown
+        return t
+
+    def _normalize_tecnico_alias(self, tecnico):
+        t = self._canonicalize_tecnico(tecnico)
+        if t == self._unknown:
+            return self._unknown
+
+        # Consolidar aliases do mesmo técnico para não dividir contagem.
+        if t in {"RAFAEL - TI", "RAFAEL SIMAO - TI"} or ("SIMAO" in t and "RAFAEL" in t):
+            return "RAFAEL SIMAO - TI"
+        if "WECKERLIN" in t or re.search(r"\bRAFAEL\s+W\b", t):
+            return "RAFAEL WECKERLIN - TI"
+        return t
 
     def _extract_between(self, text, marker):
         idx = text.lower().find(marker.lower())
@@ -62,7 +97,8 @@ class ProdutividadeService:
             d = ev["data_grav"]
             tipo = ev["tipo"]
             cod = ev.get("cod_solicitacao")
-            tecnico = self._extract_tecnico(tipo, ev["texto"]) or "---"
+            tecnico_raw = self._extract_tecnico(tipo, ev["texto"]) or "---"
+            tecnico = self._normalize_tecnico_alias(tecnico_raw)
             if tipo in {"enviado", "andamento"} and cod is not None:
                 key = (tipo, d, cod)
                 if key in seen_unique_ticket:

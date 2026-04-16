@@ -647,7 +647,6 @@
                 const res = await fetch(`/api/erp/chamado/${id}`);
                 const data = await res.json();
                 content.innerHTML = `
-                    <h2 style="margin-top:0;">Chamado #${id}</h2>
                     <div class="flow-container">
                         ${['Abertura','1º Atend.','Autoriz. Gerência','Aprovado','Finaliz.','Encerr.'].map((l,i) => {
                             const stepKeys = ['abertura','primeiro_atendimento','autorizacao_gerencia','aprovado_andamento','finalizacao','encerramento'];
@@ -667,6 +666,7 @@
                     <div class="details-grid">
                         <div>
                             ${data.criador ? `<p><strong>Criador por:</strong> ${data.criador}</p>` : ``}
+                            <p><strong>Chamado:</strong> #${id}</p>
                             <p><strong>Solicitante:</strong> ${data.solicitante || 'N/A'}</p>
                             <p><strong>Título:</strong> ${data.titulo_solicitacao}</p>
                             <p><strong>Descrição:</strong><br><div class="description-text">${data.descr_solicitacao}</div></p>
