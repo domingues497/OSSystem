@@ -15,3 +15,12 @@ def save_note():
 @local_bp.route('/note/<cod_solicitacao>')
 def get_notes(cod_solicitacao):
     return jsonify(local_note_service.listar_por_chamado(cod_solicitacao))
+
+@local_bp.route('/assignee', methods=['POST'])
+def save_assignee():
+    payload = request.get_json()
+    return jsonify(local_note_service.salvar_atendente(payload))
+
+@local_bp.route('/assignee/<cod_solicitacao>')
+def get_assignee(cod_solicitacao):
+    return jsonify(local_note_service.obter_atendente(cod_solicitacao))

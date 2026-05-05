@@ -17,3 +17,20 @@ class LocalNoteService:
 
     def listar_ids_com_notas(self, ticket_ids):
         return self.local_repo.get_ticket_ids_with_notes(ticket_ids)
+
+    def salvar_atendente(self, payload):
+        cod_solicitacao = payload.get('cod_solicitacao')
+        atendente = (payload.get('atendente') or '').strip()
+
+        if not cod_solicitacao:
+            return {"error": "Chamado não informado"}
+
+        if atendente:
+            self.local_repo.upsert_assignee(cod_solicitacao, atendente)
+        else:
+            self.local_repo.delete_assignee(cod_solicitacao)
+
+        return {"success": True, "atendente": atendente}
+
+    def obter_atendente(self, cod_solicitacao):
+        return {"atendente": self.local_repo.get_assignee_by_ticket(cod_solicitacao)}

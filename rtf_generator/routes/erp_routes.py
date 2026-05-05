@@ -79,7 +79,8 @@ def get_kanban():
         'executor': request.args.get('executor'),
         'etapa': request.args.get('etapa'),
         'ativo': request.args.get('ativo'),
-        'aprovador': request.args.get('aprovador')
+        'aprovador': request.args.get('aprovador'),
+        'encerrados_all': request.args.get('encerrados_all')
     }
     return jsonify(dashboard_service.obter_kanban(filtros))
 

@@ -48,6 +48,7 @@ class ChamadoService:
     def detalhar_chamado(self, cod_solicitacao):
         # 1. Buscar notas locais
         local_notes = self.local_repo.get_notes_by_ticket(cod_solicitacao)
+        atendente_atual = self.local_repo.get_assignee_by_ticket(cod_solicitacao)
         
         # 2. Buscar dados base do ERP
         erp_data = self.erp_repo.buscar_chamado_por_id(cod_solicitacao)
@@ -60,6 +61,7 @@ class ChamadoService:
         # 4. Formatação e Enriquecimento
         erp_data['data_cad_fmt'] = format_erp_date(erp_data['data_cad'])
         erp_data['anotacoes_locais'] = local_notes
+        erp_data['atendente_atual'] = atendente_atual
         
         # 5. Analisar Fluxo (Lógica extraída do app.py)
         dt_abertura = erp_to_datetime(erp_data['data_cad'], erp_data.get('hora_cad'))

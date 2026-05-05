@@ -211,6 +211,7 @@ class DashboardService:
         base_rows = self.erp_repo.buscar_kanban_base(base_filters)
         ids = [r["id"] for r in base_rows]
         ids_with_notes = self.local_repo.get_ticket_ids_with_notes(ids)
+        assignees_by_ticket = self.local_repo.get_assignees_by_ticket_ids(ids)
 
         kanban = {k: [] for k in status_map.keys()}
         for r in base_rows:
@@ -239,7 +240,8 @@ class DashboardService:
                 "auth_approved": bool(r["auth_approved"]),
                 "auth_req_count": int(r.get("auth_req_count") or 0),
                 "auth_appr_count": int(r.get("auth_appr_count") or 0),
-                "has_note": tid in ids_with_notes
+                "has_note": tid in ids_with_notes,
+                "atendente": assignees_by_ticket.get(tid, "")
             }
             kanban[col_name].append(item)
 

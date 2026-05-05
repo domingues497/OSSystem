@@ -38,5 +38,12 @@ def init_local_db(db_path):
             UNIQUE(day_erp, ip)
         )
     """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS ticket_assignees (
+            cod_solicitacao INTEGER PRIMARY KEY,
+            atendente TEXT NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     conn.commit()
     conn.close()

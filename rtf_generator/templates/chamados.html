@@ -205,6 +205,9 @@
                     <div class="kanban-header">
                         <span>ENCERRADOS</span>
                         <div style="display: flex; align-items: center; gap: 10px;">
+                            <button class="btn-sort" onclick="toggleEncerradosLimit()" title="Alternar entre últimos 3000 e todos">
+                                <span id="encerrados-limit-label" style="font-size: 0.68rem; font-weight: 700;">3000</span>
+                            </button>
                             <button class="btn-sort" onclick="toggleSort('encerrados')" title="Inverter Ordem">
                                 <i class="fas fa-sort" id="sort-icon-encerrados"></i>
                             </button>
@@ -232,6 +235,10 @@
         let hasLoadedKanban = false;
         let kanbanRequestId = 0;
         let filterDebounceTimer = null;
+        let aprovadoresCache = [];
+        let showAllEncerrados = localStorage.getItem('kanban-encerrados-all') === '1';
+        let currentKanbanView = {};
+        let currentModalContext = { columnId: null, ticketId: null };
         
         // Configurações do Kanban
         let kanbanSort = {
@@ -252,6 +259,16 @@
             const sec = parseInt(document.getElementById('refresh-interval').value);
             localStorage.setItem('chamados-refresh-interval', sec);
             if(sec > 0) refreshTimer = setInterval(carregarKanban, sec * 1000);
+        }
+
+        function escapeHtml(value) {
+            return String(value || '').replace(/[&<>"']/g, (char) => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            }[char]));
         }
 
         function applyInitialSettings() {
@@ -276,7 +293,22 @@
             if (modeIcon) {
                 modeIcon.style.color = aguardandoOrderMode === 'cor' ? '#1a73e8' : '';
             }
+            updateEncerradosLimitButton();
             updateOnlyApprovedButton();
+        }
+
+        function updateEncerradosLimitButton() {
+            const label = document.getElementById('encerrados-limit-label');
+            if (!label) return;
+            label.textContent = showAllEncerrados ? 'Todos' : '3000';
+            label.style.color = showAllEncerrados ? '#1a73e8' : '';
+        }
+
+        function toggleEncerradosLimit() {
+            showAllEncerrados = !showAllEncerrados;
+            localStorage.setItem('kanban-encerrados-all', showAllEncerrados ? '1' : '0');
+            updateEncerradosLimitButton();
+            carregarKanban();
         }
         
         function updateOnlyApprovedButton() {
@@ -466,7 +498,7 @@
             const status = urlParams.get('status');
             
             try {
-                let url = `/api/erp/kanban?id=${fId}&solicitante=${fSol}&start_date=${fStart}&end_date=${fEnd}&tipo=${fTipo}&assunto=${fAssunto}&assunto_q=${encodeURIComponent(fAssuntoQ || '')}&q=${encodeURIComponent(fConteudo || '')}&executor=${encodeURIComponent(fExecutor || '')}&etapa=${encodeURIComponent(fEtapa || '')}&ativo=${fAtivo}&aprovador=${encodeURIComponent(fAprovador)}`;
+                let url = `/api/erp/kanban?id=${fId}&solicitante=${fSol}&start_date=${fStart}&end_date=${fEnd}&tipo=${fTipo}&assunto=${fAssunto}&assunto_q=${encodeURIComponent(fAssuntoQ || '')}&q=${encodeURIComponent(fConteudo || '')}&executor=${encodeURIComponent(fExecutor || '')}&etapa=${encodeURIComponent(fEtapa || '')}&ativo=${fAtivo}&aprovador=${encodeURIComponent(fAprovador)}&encerrados_all=${showAllEncerrados ? '1' : '0'}`;
                 if (kpi) url += `&kpi=${encodeURIComponent(kpi)}`;
                 if (status) url += `&status=${encodeURIComponent(status)}`;
                 const response = await fetch(url);
@@ -510,6 +542,7 @@
 
         function renderTodasColunas() {
             if (!lastKanbanData) return;
+            currentKanbanView = {};
             const cols = ['aberta', 'aguardando', 'andamento', 'avaliacao'];
             if (lastKanbanData.encerrados) cols.push('encerrados');
             cols.forEach(col => {
@@ -553,6 +586,7 @@
                     const idB = parseInt(b.id);
                     return kanbanSort[col] === 'desc' ? idB - idA : idA - idB;
                 });
+                currentKanbanView[col] = [...tickets];
                 renderKanbanColumn(col, tickets, baseTickets);
             });
             const encerradosCol = document.getElementById('col-encerrados');
@@ -612,12 +646,16 @@
                 
                 const dataCad = String(t.data_cad || '');
                 const dataAbertura = dataCad.length === 8 ? `${dataCad.slice(6,8)}/${dataCad.slice(4,6)}` : '';
+                const atendenteChip = t.atendente ? `
+                    <span title="${escapeHtml(t.atendente)}" style="display:inline-block; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; background: #e8f0fe; color: #174ea6; border: 1px solid #c6dafc; font-weight: bold; vertical-align: middle;">
+                        <i class="fas fa-user"></i> ${escapeHtml(t.atendente)}
+                    </span>` : '';
                 
                 return `
-                    <div class="${cardClass}" onclick="openDetails('${t.id}')">
+                    <div class="${cardClass}" onclick="openDetails('${t.id}', '${id}')">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
                             <span style="font-weight: bold; color: #333;">
-                                #${t.id}${dataAbertura ? ` <span style="font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; background: #f1f3f4; color: #5f6368; border: 1px solid #dadce0; font-weight: bold;">${dataAbertura}</span>` : ''} ${t.has_note ? '📝' : ''}
+                                #${t.id}${dataAbertura ? ` <span style="font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; background: #f1f3f4; color: #5f6368; border: 1px solid #dadce0; font-weight: bold;">${dataAbertura}</span>` : ''} ${atendenteChip} ${t.has_note ? '📝' : ''}
                             </span>
                             <div style="display:flex; align-items:center; gap:6px;">
                                 ${showAuth ? `<span title="Aprovação gerência (aprovado/solicitado)" style="font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; background: ${authBg}; color: ${authColor}; border: 1px solid ${authBorder}; font-weight: bold;">
@@ -637,9 +675,64 @@
             container.scrollTop = previousScrollTop;
         }
 
-        async function openDetails(id) {
+        function getColumnTickets(columnId) {
+            return Array.isArray(currentKanbanView[columnId]) ? currentKanbanView[columnId] : [];
+        }
+
+        function getModalNavigationState(columnId, ticketId) {
+            const tickets = getColumnTickets(columnId);
+            const index = tickets.findIndex(t => String(t.id) === String(ticketId));
+            return {
+                tickets,
+                index,
+                prev: index > 0 ? tickets[index - 1] : null,
+                next: index >= 0 && index < tickets.length - 1 ? tickets[index + 1] : null
+            };
+        }
+
+        function buildModalNavigationHtml(columnId, ticketId) {
+            if (!columnId) return '';
+            const nav = getModalNavigationState(columnId, ticketId);
+            if (!nav.tickets.length || nav.index < 0) return '';
+            const columnTitles = {
+                aberta: 'ABERTA',
+                aguardando: 'AGUARDANDO',
+                andamento: 'ANDAMENTO',
+                avaliacao: 'AVALIAÇÃO',
+                encerrados: 'ENCERRADOS'
+            };
+            const prevDisabled = nav.prev ? '' : 'disabled';
+            const nextDisabled = nav.next ? '' : 'disabled';
+            return `
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px; padding:8px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#f8faff;">
+                    <button type="button" class="btn-small" onclick="navegarNoModal(-1)" ${prevDisabled} style="${nav.prev ? '' : 'opacity:0.5; cursor:not-allowed;'}">
+                        <i class="fas fa-arrow-left"></i> Anterior
+                    </button>
+                    <div style="font-size:0.82rem; color:#5f6368; text-align:center;">
+                        ${columnTitles[columnId] || columnId} - ${nav.index + 1} de ${nav.tickets.length}
+                    </div>
+                    <button type="button" class="btn-small" onclick="navegarNoModal(1)" ${nextDisabled} style="${nav.next ? '' : 'opacity:0.5; cursor:not-allowed;'}">
+                        Próximo <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+            `;
+        }
+
+        function navegarNoModal(direction) {
+            const columnId = currentModalContext.columnId;
+            const ticketId = currentModalContext.ticketId;
+            if (!columnId || !ticketId) return;
+            const nav = getModalNavigationState(columnId, ticketId);
+            const target = direction < 0 ? nav.prev : nav.next;
+            if (!target) return;
+            openDetails(String(target.id), columnId);
+        }
+
+        async function openDetails(id, columnId = null) {
             const modal = document.getElementById('details-modal');
             const content = document.getElementById('modal-content');
+            const resolvedColumnId = columnId || currentModalContext.columnId;
+            currentModalContext = { columnId: resolvedColumnId, ticketId: String(id) };
             modal.style.display = 'flex';
             content.innerHTML = '<div class="loading">Carregando detalhes...</div>';
             
@@ -647,6 +740,7 @@
                 const res = await fetch(`/api/erp/chamado/${id}`);
                 const data = await res.json();
                 content.innerHTML = `
+                    ${buildModalNavigationHtml(resolvedColumnId, id)}
                     <div class="flow-container">
                         ${['Abertura','1º Atend.','Autoriz. Gerência','Aprovado','Finaliz.','Encerr.'].map((l,i) => {
                             const stepKeys = ['abertura','primeiro_atendimento','autorizacao_gerencia','aprovado_andamento','finalizacao','encerramento'];
@@ -667,12 +761,25 @@
                         <div>
                             ${data.criador ? `<p><strong>Criador por:</strong> ${data.criador}</p>` : ``}
                             <p><strong>Chamado:</strong> #${id}</p>
+                            <p><strong>Atendente:</strong> ${data.atendente_atual ? escapeHtml(data.atendente_atual) : 'Não definido'}</p>
                             <p><strong>Solicitante:</strong> ${data.solicitante || 'N/A'}</p>
                             <p><strong>Título:</strong> ${data.titulo_solicitacao}</p>
                             <p><strong>Descrição:</strong><br><div class="description-text">${data.descr_solicitacao}</div></p>
                             <p><strong>Ativo:</strong> ${data.descr_ativo || 'N/A'}</p>
                         </div>
                         <div>
+                            <div class="local-notes-section" style="margin-bottom: 12px;">
+                                <strong>👤 Atendente do Chamado:</strong>
+                                <div style="display:flex; gap:8px; margin-top:8px;">
+                                    <select id="modal-assignee-${id}" class="filter-input" style="flex:1; padding: 8px;">
+                                        <option value="">Carregando...</option>
+                                    </select>
+                                    <button class="btn-small" onclick="salvarAtendenteModal('${id}')">Salvar</button>
+                                </div>
+                                <div id="modal-assignee-feedback-${id}" style="margin-top:6px; font-size:0.78rem; color:#5f6368;">
+                                    ${data.atendente_atual ? `Atual: ${escapeHtml(data.atendente_atual)}` : 'Nenhum atendente definido.'}
+                                </div>
+                            </div>
                             <div class="comment-section" style="max-height:300px; overflow-y:auto;">
                                 <strong>📜 Histórico ERP:</strong>
                                 ${data.comentarios_erp.map(c => `
@@ -689,10 +796,60 @@
                             </div>
                         </div>
                     </div>`;
+                preencherAtendenteModal(id, data.atendente_atual || '');
             } catch(e) { content.innerHTML = 'Erro ao carregar.'; }
         }
 
-        function closeDetails() { document.getElementById('details-modal').style.display = 'none'; }
+        function closeDetails() {
+            currentModalContext = { columnId: null, ticketId: null };
+            document.getElementById('details-modal').style.display = 'none';
+        }
+
+        function atualizarFeedbackAtendente(id, atendente) {
+            const feedback = document.getElementById(`modal-assignee-feedback-${id}`);
+            if (!feedback) return;
+            feedback.textContent = atendente ? `Atual: ${atendente}` : 'Nenhum atendente definido.';
+        }
+
+        function preencherAtendenteModal(id, atendenteAtual) {
+            const select = document.getElementById(`modal-assignee-${id}`);
+            if (!select) return;
+            const current = atendenteAtual || '';
+            const options = ['<option value="">Sem atendente</option>'];
+            aprovadoresCache.forEach(nome => {
+                const safe = escapeHtml(nome);
+                options.push(`<option value="${safe}" ${nome === current ? 'selected' : ''}>${safe}</option>`);
+            });
+            if (current && !aprovadoresCache.includes(current)) {
+                const safe = escapeHtml(current);
+                options.push(`<option value="${safe}" selected>${safe}</option>`);
+            }
+            select.innerHTML = options.join('');
+            select.value = current;
+        }
+
+        async function salvarAtendenteModal(id) {
+            const select = document.getElementById(`modal-assignee-${id}`);
+            if (!select) return;
+            const atendente = select.value || '';
+            atualizarFeedbackAtendente(id, 'Salvando...');
+            try {
+                const response = await fetch('/api/local/assignee', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({cod_solicitacao: id, atendente})
+                });
+                const result = await response.json();
+                if (!response.ok || result.error) {
+                    throw new Error(result.error || 'Falha ao salvar atendente');
+                }
+                atualizarFeedbackAtendente(id, result.atendente || '');
+                carregarKanban();
+            } catch (e) {
+                console.error('Erro ao salvar atendente', e);
+                atualizarFeedbackAtendente(id, 'Erro ao salvar atendente.');
+            }
+        }
 
         async function salvarNotaModal(id) {
             const txt = document.getElementById(`modal-note-text-${id}`).value;
@@ -760,11 +917,12 @@
             try {
                 const res = await fetch('/api/erp/aprovadores');
                 const aprovadores = await res.json();
+                aprovadoresCache = Array.isArray(aprovadores) ? aprovadores : [];
                 const select = document.getElementById('filter-aprovador');
                 const currentValue = select.value;
                 
                 select.innerHTML = '<option value="">Todos</option>';
-                aprovadores.forEach(nome => {
+                aprovadoresCache.forEach(nome => {
                     const opt = document.createElement('option');
                     opt.value = nome;
                     opt.textContent = nome;

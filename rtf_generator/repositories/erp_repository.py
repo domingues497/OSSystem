@@ -899,6 +899,8 @@ class ERPRepository:
         etapa_filter = (filtros.get('etapa') or '').strip().lower()
         ativo_filter = filtros.get('ativo')
         aprovador_filter = filtros.get('aprovador')
+        encerrados_all = str(filtros.get('encerrados_all') or '').strip().lower() in {'1', 'true', 'yes', 'on', 'todos', 'all'}
+        encerrados_limit = 3000
 
         conn = get_erp_connection()
         cur = conn.cursor()
@@ -1172,7 +1174,43 @@ class ERPRepository:
                 )"""
                 params.append(f"%{clean_exec}%")
 
-        query += " ORDER BY DM1744.DATA_CAD DESC, DM1744.COD_SOLICITACAO DESC"
+        if not encerrados_all and 'BA' in status_filter_set:
+            query = f"""
+                WITH base_kanban AS (
+                    {query}
+                ),
+                ranked_kanban AS (
+                    SELECT
+                        base_kanban.*,
+                        CASE
+                            WHEN base_kanban.COD_STATUS_DOC = 'BA' THEN
+                                ROW_NUMBER() OVER (
+                                    PARTITION BY base_kanban.COD_STATUS_DOC
+                                    ORDER BY base_kanban.DATA_CAD DESC, base_kanban.COD_SOLICITACAO DESC
+                                )
+                            ELSE 1
+                        END AS ENCERRADOS_RN
+                    FROM base_kanban
+                )
+                SELECT
+                    COD_SOLICITACAO,
+                    TITULO_SOLICITACAO,
+                    COD_STATUS_DOC,
+                    DATA_CAD,
+                    HORA_CAD,
+                    SOLICITANTE,
+                    NO_ITERATION,
+                    WAITING_AUTH,
+                    AUTH_APPROVED,
+                    AUTH_REQ_COUNT,
+                    AUTH_APPR_COUNT
+                FROM ranked_kanban
+                WHERE COD_STATUS_DOC <> 'BA' OR ENCERRADOS_RN <= %s
+                ORDER BY DATA_CAD DESC, COD_SOLICITACAO DESC
+            """
+            params.append(encerrados_limit)
+        else:
+            query += " ORDER BY DM1744.DATA_CAD DESC, DM1744.COD_SOLICITACAO DESC"
 
         cur.execute(query, params)
         rows = cur.fetchall()
