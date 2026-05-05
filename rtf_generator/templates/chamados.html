@@ -252,7 +252,7 @@
         };
         let aguardandoOrderMode = localStorage.getItem('dash-aguardando-order') || 'cor';
         let lastKanbanData = null;
-        let onlyApproved = localStorage.getItem('chamados-only-approved') === '1';
+        let onlyApproved = false;
         let aguardandoFilter = localStorage.getItem('chamados-aguardando-filter') || 'all';
         if (!['all', 'waiting', 'approved'].includes(aguardandoFilter)) aguardandoFilter = 'all';
 
@@ -274,6 +274,8 @@
         }
 
         function applyInitialSettings() {
+            localStorage.removeItem('chamados-only-approved');
+
             // Aplicar intervalo de atualização
             const savedInterval = localStorage.getItem('chamados-refresh-interval') || "60";
             const select = document.getElementById('refresh-interval');
@@ -327,7 +329,6 @@
         
         function toggleOnlyApproved() {
             onlyApproved = !onlyApproved;
-            localStorage.setItem('chamados-only-approved', onlyApproved ? '1' : '0');
             updateOnlyApprovedButton();
             renderTodasColunas();
         }
@@ -466,6 +467,8 @@
                     el.value = '';
                 }
             });
+            onlyApproved = false;
+            updateOnlyApprovedButton();
             try {
                 const url = new URL(window.location.href);
                 ['kpi','status','tipo','assunto','ativo','aprovador','start_date','end_date','executor','etapa','q','assunto_q'].forEach(k => url.searchParams.delete(k));
