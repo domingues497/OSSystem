@@ -224,6 +224,8 @@
     <!-- Modal de Detalhes -->
     <div id="details-modal" class="modal-overlay">
         <div class="modal-container">
+            <button type="button" id="modal-nav-prev" class="modal-side-nav modal-side-nav-left" onclick="navegarNoModal(-1)" aria-label="Chamado anterior">&lsaquo;</button>
+            <button type="button" id="modal-nav-next" class="modal-side-nav modal-side-nav-right" onclick="navegarNoModal(1)" aria-label="Próximo chamado">&rsaquo;</button>
             <button onclick="closeDetails()" class="modal-close">&times;</button>
             <div id="modal-content"></div>
         </div>
@@ -690,6 +692,23 @@
             };
         }
 
+        function updateModalSideNav(columnId, ticketId) {
+            const prevBtn = document.getElementById('modal-nav-prev');
+            const nextBtn = document.getElementById('modal-nav-next');
+            if (!prevBtn || !nextBtn) return;
+            const nav = columnId ? getModalNavigationState(columnId, ticketId) : null;
+            const hasContext = !!(nav && nav.tickets.length && nav.index >= 0);
+
+            [prevBtn, nextBtn].forEach(btn => {
+                btn.style.display = hasContext ? 'flex' : 'none';
+            });
+
+            if (!hasContext) return;
+
+            prevBtn.disabled = !nav.prev;
+            nextBtn.disabled = !nav.next;
+        }
+
         function buildModalNavigationHtml(columnId, ticketId) {
             if (!columnId) return '';
             const nav = getModalNavigationState(columnId, ticketId);
@@ -701,19 +720,11 @@
                 avaliacao: 'AVALIAÇÃO',
                 encerrados: 'ENCERRADOS'
             };
-            const prevDisabled = nav.prev ? '' : 'disabled';
-            const nextDisabled = nav.next ? '' : 'disabled';
             return `
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px; padding:8px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#f8faff;">
-                    <button type="button" class="btn-small" onclick="navegarNoModal(-1)" ${prevDisabled} style="${nav.prev ? '' : 'opacity:0.5; cursor:not-allowed;'}">
-                        <i class="fas fa-arrow-left"></i> Anterior
-                    </button>
+                <div class="modal-nav-status">
                     <div style="font-size:0.82rem; color:#5f6368; text-align:center;">
                         ${columnTitles[columnId] || columnId} - ${nav.index + 1} de ${nav.tickets.length}
                     </div>
-                    <button type="button" class="btn-small" onclick="navegarNoModal(1)" ${nextDisabled} style="${nav.next ? '' : 'opacity:0.5; cursor:not-allowed;'}">
-                        Próximo <i class="fas fa-arrow-right"></i>
-                    </button>
                 </div>
             `;
         }
@@ -728,12 +739,27 @@
             openDetails(String(target.id), columnId);
         }
 
+        function handleModalKeyNavigation(event) {
+            const modal = document.getElementById('details-modal');
+            if (!modal || modal.style.display !== 'flex') return;
+            const targetTag = (event.target && event.target.tagName ? event.target.tagName : '').toUpperCase();
+            if (['INPUT', 'TEXTAREA', 'SELECT'].includes(targetTag)) return;
+            if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                navegarNoModal(-1);
+            } else if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                navegarNoModal(1);
+            }
+        }
+
         async function openDetails(id, columnId = null) {
             const modal = document.getElementById('details-modal');
             const content = document.getElementById('modal-content');
             const resolvedColumnId = columnId || currentModalContext.columnId;
             currentModalContext = { columnId: resolvedColumnId, ticketId: String(id) };
             modal.style.display = 'flex';
+            updateModalSideNav(resolvedColumnId, id);
             content.innerHTML = '<div class="loading">Carregando detalhes...</div>';
             
             try {
@@ -797,11 +823,13 @@
                         </div>
                     </div>`;
                 preencherAtendenteModal(id, data.atendente_atual || '');
+                updateModalSideNav(resolvedColumnId, id);
             } catch(e) { content.innerHTML = 'Erro ao carregar.'; }
         }
 
         function closeDetails() {
             currentModalContext = { columnId: null, ticketId: null };
+            updateModalSideNav(null, null);
             document.getElementById('details-modal').style.display = 'none';
         }
 
@@ -984,6 +1012,7 @@
             setupEnterToFilter();
             setupLiveFilters();
             setupHiddenAdvancedFilterShortcut();
+            document.addEventListener('keydown', handleModalKeyNavigation);
             carregarKanban();
         })();
     </script>
