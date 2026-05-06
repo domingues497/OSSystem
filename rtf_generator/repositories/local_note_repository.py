@@ -97,3 +97,19 @@ class LocalNoteRepository:
         rows = cur.fetchall()
         conn.close()
         return {int(r[0]): r[1] for r in rows}
+
+    def get_distinct_assignees(self):
+        conn = get_local_connection(self.db_path)
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT DISTINCT atendente
+            FROM {TABLE_TICKET_ASSIGNEES}
+            WHERE atendente IS NOT NULL
+              AND BTRIM(atendente) <> ''
+            ORDER BY atendente
+            """
+        )
+        rows = cur.fetchall()
+        conn.close()
+        return [r[0] for r in rows]

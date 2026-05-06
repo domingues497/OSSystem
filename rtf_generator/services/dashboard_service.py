@@ -217,7 +217,10 @@ class DashboardService:
         for r in base_rows:
             tid = int(r["id"])
             item_tipo = classify_ticket(r["titulo"])
+            atendente = assignees_by_ticket.get(tid, "")
             if f_tipo and item_tipo != f_tipo:
+                continue
+            if f_aprovador and (atendente or "").strip().upper() != str(f_aprovador).strip().upper():
                 continue
 
             col_name = None
@@ -241,7 +244,7 @@ class DashboardService:
                 "auth_req_count": int(r.get("auth_req_count") or 0),
                 "auth_appr_count": int(r.get("auth_appr_count") or 0),
                 "has_note": tid in ids_with_notes,
-                "atendente": assignees_by_ticket.get(tid, "")
+                "atendente": atendente
             }
             kanban[col_name].append(item)
 

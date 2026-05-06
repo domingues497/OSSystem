@@ -24,3 +24,7 @@ def save_assignee():
 @local_bp.route('/assignee/<cod_solicitacao>')
 def get_assignee(cod_solicitacao):
     return jsonify(local_note_service.obter_atendente(cod_solicitacao))
+
+@local_bp.route('/assignees')
+def get_assignees():
+    return jsonify(local_note_service.listar_atendentes())

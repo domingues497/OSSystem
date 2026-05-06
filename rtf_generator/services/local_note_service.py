@@ -34,3 +34,6 @@ class LocalNoteService:
 
     def obter_atendente(self, cod_solicitacao):
         return {"atendente": self.local_repo.get_assignee_by_ticket(cod_solicitacao)}
+
+    def listar_atendentes(self):
+        return self.local_repo.get_distinct_assignees()
