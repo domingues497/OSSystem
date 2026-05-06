@@ -21,8 +21,9 @@ def create_app():
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     os.makedirs(app.config['GENERATED_FOLDER'], exist_ok=True)
     
-    # Inicializar banco local
-    init_local_db(app.config['LOCAL_DB'])
+    # Inicializar schema/tabelas auxiliares apenas quando explicitamente habilitado
+    if app.config.get('INIT_LOCAL_DB_ON_START'):
+        init_local_db(app.config['LOCAL_DB'])
     access_repo = LocalAccessRepository(app.config['LOCAL_DB'])
 
     @app.before_request
