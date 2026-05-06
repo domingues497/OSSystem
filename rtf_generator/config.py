@@ -6,7 +6,7 @@ load_dotenv()
 class Config:
     UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', 'uploads')
     GENERATED_FOLDER = os.environ.get('GENERATED_FOLDER', 'generated')
-    LOCAL_DB = os.path.join(os.path.dirname(__file__), 'local_notes.db')
+    LOCAL_DB = os.getenv("LOCAL_DB_SCHEMA", "capalti")
     
     ERP_DB_NAME = os.getenv("ERP_DB_NAME")
     ERP_DB_USER = os.getenv("ERP_DB_USER")

@@ -1,4 +1,4 @@
-from database.local_connection import get_local_connection
+from database.local_connection import TABLE_ALERTS, get_local_connection
 
 class LocalAlertRepository:
     def __init__(self, db_path):
@@ -7,7 +7,10 @@ class LocalAlertRepository:
     def was_sent(self, cod_solicitacao, alert_type):
         conn = get_local_connection(self.db_path)
         cur = conn.cursor()
-        cur.execute("SELECT 1 FROM alerts WHERE cod_solicitacao = ? AND alert_type = ? LIMIT 1", (cod_solicitacao, alert_type))
+        cur.execute(
+            f"SELECT 1 FROM {TABLE_ALERTS} WHERE cod_solicitacao = %s AND alert_type = %s LIMIT 1",
+            (cod_solicitacao, alert_type)
+        )
         exists = cur.fetchone() is not None
         conn.close()
         return exists
@@ -15,6 +18,9 @@ class LocalAlertRepository:
     def mark_sent(self, cod_solicitacao, alert_type):
         conn = get_local_connection(self.db_path)
         cur = conn.cursor()
-        cur.execute("INSERT INTO alerts (cod_solicitacao, alert_type) VALUES (?, ?)", (cod_solicitacao, alert_type))
+        cur.execute(
+            f"INSERT INTO {TABLE_ALERTS} (cod_solicitacao, alert_type) VALUES (%s, %s)",
+            (cod_solicitacao, alert_type)
+        )
         conn.commit()
         conn.close()

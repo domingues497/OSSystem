@@ -1,5 +1,5 @@
 from datetime import datetime
-from database.local_connection import get_local_connection
+from database.local_connection import TABLE_ACCESS_DAILY, get_local_connection
 
 
 class LocalAccessRepository:
@@ -16,14 +16,14 @@ class LocalAccessRepository:
         cur = conn.cursor()
         cur.execute(
             """
-            INSERT INTO access_daily (day_erp, ip, count, first_seen, last_seen, last_path, user_agent)
-            VALUES (?, ?, 1, ?, ?, ?, ?)
+            INSERT INTO {table} (day_erp, ip, count, first_seen, last_seen, last_path, user_agent)
+            VALUES (%s, %s, 1, %s, %s, %s, %s)
             ON CONFLICT(day_erp, ip) DO UPDATE SET
                 count = count + 1,
-                last_seen = excluded.last_seen,
-                last_path = excluded.last_path,
-                user_agent = excluded.user_agent
-            """,
+                last_seen = EXCLUDED.last_seen,
+                last_path = EXCLUDED.last_path,
+                user_agent = EXCLUDED.user_agent
+            """.format(table=TABLE_ACCESS_DAILY),
             (day_erp, ip, now_str, now_str, (path or "")[:500], (user_agent or "")[:400]),
         )
         conn.commit()
@@ -35,10 +35,10 @@ class LocalAccessRepository:
         cur.execute(
             """
             SELECT ip, count, first_seen, last_seen, last_path
-            FROM access_daily
-            WHERE day_erp = ?
+            FROM {table}
+            WHERE day_erp = %s
             ORDER BY count DESC, ip ASC
-            """,
+            """.format(table=TABLE_ACCESS_DAILY),
             (int(day_erp),),
         )
         rows = cur.fetchall()
