@@ -9,6 +9,27 @@ h2 { font-size: 1.2rem; color: #444; margin-bottom: 1rem; display: flex; align-i
 .filter-label { font-size: 0.85rem; font-weight: 600; color: #495057; }
 .filters-grid .filter-input { padding: 10px; border: 1.5px solid #ddd; border-radius: 8px; font-size: 0.9rem; transition: 0.2s; width: auto; box-sizing: border-box; }
 .filter-input:focus { border-color: #1a73e8; outline: none; box-shadow: 0 0 0 3px rgba(26,115,232,0.1); }
+.filters-grid .filter-input,
+.filters-grid select.filter-input,
+.filters-grid input.filter-input {
+    height: 40px;
+    padding: 8px 10px;
+    font-size: 0.9rem;
+    font-family: inherit;
+}
+.filters-grid select.filter-input { min-width: 0; }
+.filter-label-secondary { font-size: 0.72rem; line-height: 1.1; }
+.filter-assunto-row { display: flex; gap: 6px; align-items: flex-end; }
+.filter-assunto-select-wrap { display: flex; flex-direction: column; gap: 4px; }
+.filter-input-id { width: 6ch; }
+.filter-input-solicitante { width: 12ch; }
+.filter-select-tecnico { width: 200px; }
+.filter-input-date { width: 11ch; }
+.filter-input-conteudo { width: 16ch; }
+.filter-select-tipo { width: 110px; }
+.filter-input-assunto-busca { width: 11ch; }
+.filter-select-assunto { width: 150px; }
+.filter-select-ativo { width: 120px; max-width: 120px; }
 .filter-actions { flex-direction: row; gap: 8px; min-width: auto; justify-content: flex-end; align-items: flex-end; margin-left: auto; }
 .filter-actions .btn { white-space: nowrap; }
 .btn-filter { padding: 10px 16px; font-size: 0.9rem; border-radius: 8px; }

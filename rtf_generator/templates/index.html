@@ -395,7 +395,7 @@
                 return `
                     <div class="pending-card ${sla?.isOverdue ? 'overdue' : ''}" onclick="openDetails('${t.cod_solicitacao}')" style="cursor:pointer;">
                         <div style="display:flex; justify-content:space-between; align-items:start;">
-                            <strong style="font-size: 0.9rem;">#${t.cod_solicitacao} ${t.has_local_note ? '📝' : ''}</strong>
+                            <strong style="font-size: 1.05rem;">#${t.cod_solicitacao} ${t.has_local_note ? '📝' : ''}</strong>
                             <span class="status-badge" style="font-size:0.65rem;">${badge || t.cod_status_doc || '...'}</span>
                         </div>
                         <div style="font-size: 0.85rem; margin-top:5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${t.titulo_solicitacao}</div>

@@ -37,58 +37,58 @@
         </div>
 
         <div class="filters-grid">
-            <div class="filter-group">
+            <div class="filter-group filter-group-id">
                 <label class="filter-label">Chamado</label>
-                <input type="text" id="filter-id" class="filter-input" placeholder="Ex: 81340" maxlength="6" style="width: 7ch; padding: 8px;">
+                <input type="text" id="filter-id" class="filter-input filter-input-id" placeholder="Ex: 81340" maxlength="6">
             </div>
-            <div class="filter-group">
+            <div class="filter-group filter-group-solicitante">
                 <label class="filter-label">Solicitante</label>
-                <input type="text" id="filter-solicitante" class="filter-input" placeholder="Nome..." style="width: 12ch; padding: 8px;">
+                <input type="text" id="filter-solicitante" class="filter-input filter-input-solicitante" placeholder="Nome...">
             </div>
-            <div class="filter-group">
+            <div class="filter-group filter-group-tecnico">
                 <label class="filter-label">Tec. Atrib.:</label>
-                <select id="filter-aprovador" class="filter-input" style="padding: 8px;" onchange="carregarKanban();">
+                <select id="filter-aprovador" class="filter-input filter-select-tecnico" onchange="carregarKanban();">
                     <option value="">Todos</option>
                 </select>
             </div>
-            <div class="filter-group">
+            <div class="filter-group filter-group-date">
                 <label class="filter-label">Início:</label>
-                <input type="date" id="filter-start-date" class="filter-input" style="padding: 8px; width: 10.5ch;">
+                <input type="date" id="filter-start-date" class="filter-input filter-input-date">
             </div>
-            <div class="filter-group">
+            <div class="filter-group filter-group-date">
                 <label class="filter-label">Fim:</label>
-                <input type="date" id="filter-end-date" class="filter-input" style="padding: 8px; width: 10.5ch;">
+                <input type="date" id="filter-end-date" class="filter-input filter-input-date">
             </div>
-            <div class="filter-group">
+            <div class="filter-group filter-group-conteudo">
                 <label class="filter-label">Conteúdo:</label>
-                <input type="text" id="filter-conteudo" class="filter-input" placeholder="Texto..." style="width: 18ch; padding: 8px;">
+                <input type="text" id="filter-conteudo" class="filter-input filter-input-conteudo" placeholder="Texto...">
             </div>
             <input type="hidden" id="filter-executor">
             <input type="hidden" id="filter-etapa">
-            <div class="filter-group">
+            <div class="filter-group filter-group-tipo">
                 <label class="filter-label">Tipo:</label>
-                <select id="filter-tipo" class="filter-input" style="padding: 8px;" onchange="carregarAssuntos(); carregarAtivos(); carregarKanban();">
+                <select id="filter-tipo" class="filter-input filter-select-tipo" onchange="carregarAssuntos(); carregarAtivos(); carregarKanban();">
                     <option value="">Todos</option>
                     <option value="Incidente">Incidente</option>
                     <option value="Requisição">Requisição</option>
                     <option value="BI">B.I</option>
                 </select>
             </div>
-            <div class="filter-group">
+            <div class="filter-group filter-group-assunto">
                 <label class="filter-label">Assunto:</label>
-                <div style="display:flex; gap:6px; align-items:center;">
-                    <div style="display:flex; flex-direction:column; gap:4px;">
-                        <label for="filter-assunto-q" class="filter-label" style="font-size: 0.72rem;">Buscar Assunto:</label>
-                        <input type="text" id="filter-assunto-q" class="filter-input" placeholder="Buscar...." style="padding: 8px; width: 12ch;">
+                <div class="filter-assunto-row">
+                    <input type="text" id="filter-assunto-q" class="filter-input filter-input-assunto-busca" placeholder="Buscar....">
+                    <div class="filter-assunto-select-wrap">
+                        <label for="filter-assunto" class="filter-label filter-label-secondary">Assunto / Setor</label>
+                        <select id="filter-assunto" class="filter-input filter-select-assunto" onchange="carregarAtivos(); carregarKanban();">
+                            <option value="">Todos</option>
+                        </select>
                     </div>
-                    <select id="filter-assunto" class="filter-input" style="padding: 8px; width: 18ch;" onchange="carregarAtivos(); carregarKanban();">
-                        <option value="">Todos</option>
-                    </select>
                 </div>
             </div>
-            <div class="filter-group">
+            <div class="filter-group filter-group-ativo">
                 <label class="filter-label">Ativo:</label>
-                <select id="filter-ativo" class="filter-input" style="padding: 8px;" onchange="carregarKanban();">
+                <select id="filter-ativo" class="filter-input filter-select-ativo" onchange="carregarKanban();">
                     <option value="">Todos</option>
                 </select>
             </div>
@@ -244,7 +244,7 @@
         let tecnicosFiltroCache = [];
         let showAllEncerrados = localStorage.getItem('kanban-encerrados-all') === '1';
         let currentKanbanView = {};
-        let currentModalContext = { columnId: null, ticketId: null };
+        let currentModalContext = { columnId: null, ticketId: null, ticketsSnapshot: [] };
         
         // Configurações do Kanban
         let kanbanSort = {
@@ -600,6 +600,7 @@
             });
             const encerradosCol = document.getElementById('col-encerrados');
             if (encerradosCol) encerradosCol.style.display = lastKanbanData.encerrados ? 'flex' : 'none';
+            refreshModalNavigationIndicator();
         }
 
         function renderKanbanColumn(id, tickets, baseTickets = null) {
@@ -684,19 +685,63 @@
             container.scrollTop = previousScrollTop;
         }
 
-        function getColumnTickets(columnId) {
+        function getColumnTickets(columnId, useSnapshot = true) {
+            if (useSnapshot && currentModalContext.columnId === columnId && Array.isArray(currentModalContext.ticketsSnapshot) && currentModalContext.ticketsSnapshot.length) {
+                return currentModalContext.ticketsSnapshot;
+            }
             return Array.isArray(currentKanbanView[columnId]) ? currentKanbanView[columnId] : [];
         }
 
         function getModalNavigationState(columnId, ticketId) {
-            const tickets = getColumnTickets(columnId);
-            const index = tickets.findIndex(t => String(t.id) === String(ticketId));
+            let tickets = getColumnTickets(columnId, true);
+            let index = tickets.findIndex(t => String(t.id) === String(ticketId));
+            if (index < 0) {
+                tickets = getColumnTickets(columnId, false);
+                index = tickets.findIndex(t => String(t.id) === String(ticketId));
+            }
             return {
                 tickets,
                 index,
                 prev: index > 0 ? tickets[index - 1] : null,
                 next: index >= 0 && index < tickets.length - 1 ? tickets[index + 1] : null
             };
+        }
+
+        function isTicketStillInCurrentColumn(columnId, ticketId) {
+            const liveTickets = getColumnTickets(columnId, false);
+            return liveTickets.some(t => String(t.id) === String(ticketId));
+        }
+
+        function buildModalNavigationStatus(columnId, ticketId) {
+            if (!columnId) return '';
+            const nav = getModalNavigationState(columnId, ticketId);
+            if (!nav.tickets.length || nav.index < 0) return '';
+            const columnTitles = {
+                aberta: 'ABERTA',
+                aguardando: 'AGUARDANDO',
+                andamento: 'ANDAMENTO',
+                avaliacao: 'AVALIAÇÃO',
+                encerrados: 'ENCERRADOS'
+            };
+            const movedOut = !isTicketStillInCurrentColumn(columnId, ticketId);
+            return `
+                <div style="font-size:0.82rem; color:#5f6368; text-align:center;">
+                    ${columnTitles[columnId] || columnId} - ${nav.index + 1} de ${nav.tickets.length}
+                </div>
+                ${movedOut ? `
+                    <div style="margin-top:6px; font-size:0.76rem; color:#b06000; text-align:center;">
+                        Este chamado mudou de etapa no refresh, mas a navegacao continua pela lista original.
+                    </div>
+                ` : ''}
+            `;
+        }
+
+        function refreshModalNavigationIndicator() {
+            const statusEl = document.getElementById('modal-nav-status-content');
+            const { columnId, ticketId } = currentModalContext;
+            if (!statusEl || !columnId || !ticketId) return;
+            statusEl.innerHTML = buildModalNavigationStatus(columnId, ticketId);
+            updateModalSideNav(columnId, ticketId);
         }
 
         function updateModalSideNav(columnId, ticketId) {
@@ -720,17 +765,10 @@
             if (!columnId) return '';
             const nav = getModalNavigationState(columnId, ticketId);
             if (!nav.tickets.length || nav.index < 0) return '';
-            const columnTitles = {
-                aberta: 'ABERTA',
-                aguardando: 'AGUARDANDO',
-                andamento: 'ANDAMENTO',
-                avaliacao: 'AVALIAÇÃO',
-                encerrados: 'ENCERRADOS'
-            };
             return `
                 <div class="modal-nav-status">
-                    <div style="font-size:0.82rem; color:#5f6368; text-align:center;">
-                        ${columnTitles[columnId] || columnId} - ${nav.index + 1} de ${nav.tickets.length}
+                    <div id="modal-nav-status-content">
+                        ${buildModalNavigationStatus(columnId, ticketId)}
                     </div>
                 </div>
             `;
@@ -764,7 +802,12 @@
             const modal = document.getElementById('details-modal');
             const content = document.getElementById('modal-content');
             const resolvedColumnId = columnId || currentModalContext.columnId;
-            currentModalContext = { columnId: resolvedColumnId, ticketId: String(id) };
+            const snapshot = resolvedColumnId ? getColumnTickets(resolvedColumnId, false).map(t => ({ ...t })) : [];
+            currentModalContext = {
+                columnId: resolvedColumnId,
+                ticketId: String(id),
+                ticketsSnapshot: snapshot
+            };
             modal.style.display = 'flex';
             updateModalSideNav(resolvedColumnId, id);
             content.innerHTML = '<div class="loading">Carregando detalhes...</div>';
@@ -835,7 +878,7 @@
         }
 
         function closeDetails() {
-            currentModalContext = { columnId: null, ticketId: null };
+            currentModalContext = { columnId: null, ticketId: null, ticketsSnapshot: [] };
             updateModalSideNav(null, null);
             document.getElementById('details-modal').style.display = 'none';
         }
