@@ -900,7 +900,7 @@ class ERPRepository:
         ativo_filter = filtros.get('ativo')
         aprovador_filter = filtros.get('aprovador')
         encerrados_all = str(filtros.get('encerrados_all') or '').strip().lower() in {'1', 'true', 'yes', 'on', 'todos', 'all'}
-        encerrados_limit = 3000
+        encerrados_limit = 1000
 
         conn = get_erp_connection()
         cur = conn.cursor()
