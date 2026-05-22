@@ -8,10 +8,17 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "insecure-secret-key")
+DJANGO_DB_SCHEMA = os.getenv("DJANGO_DB_SCHEMA", "capalti")
 
 DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
 
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",")
+
+APP_DB_NAME = os.getenv("APP_DB_NAME") or os.getenv("ERP_DB_NAME")
+APP_DB_USER = os.getenv("APP_DB_USER") or os.getenv("ERP_DB_USER")
+APP_DB_PASS = os.getenv("APP_DB_PASS") or os.getenv("ERP_DB_PASS")
+APP_DB_HOST = os.getenv("APP_DB_HOST") or os.getenv("ERP_DB_HOST")
+APP_DB_PORT = os.getenv("APP_DB_PORT") or os.getenv("ERP_DB_PORT")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -23,9 +30,10 @@ INSTALLED_APPS = [
     "rest_framework",
     "corsheaders",
     "rest_framework_simplejwt",
-    "apps.accounts",
+    "apps.accounts.apps.AccountsConfig",
     "apps.customers",
     "apps.workorders",
+    "apps.commissions",
 ]
 
 MIDDLEWARE = [
@@ -62,8 +70,12 @@ ASGI_APPLICATION = "sgos.asgi.application"
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": APP_DB_NAME,
+        "USER": APP_DB_USER,
+        "PASSWORD": APP_DB_PASS,
+        "HOST": APP_DB_HOST,
+        "PORT": APP_DB_PORT,
     },
     "erp": {
         "ENGINE": "django.db.backends.postgresql",
@@ -96,6 +108,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework.authentication.SessionAuthentication",
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": (
@@ -110,3 +123,18 @@ SIMPLE_JWT = {
 }
 
 CORS_ALLOW_ALL_ORIGINS = True
+
+AUTHENTICATION_BACKENDS = (
+    "apps.accounts.ldap_backend.DynamicLDAPBackend",
+    "django.contrib.auth.backends.ModelBackend",
+)
+
+LOGIN_URL = "/login/"
+LOGIN_REDIRECT_URL = "/dashboard/"
+LOGOUT_REDIRECT_URL = "/login/"
+
+SUPERADMIN_USERNAMES = [
+    u.strip().lower()
+    for u in os.getenv("DJANGO_SUPERADMINS", "").split(",")
+    if u.strip()
+]

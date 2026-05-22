@@ -1,4 +1,12 @@
+import os
+import logging
+from pathlib import Path
+from dotenv import load_dotenv
 from flask import Flask, request
+
+_backend_env_path = Path(__file__).resolve().parent.parent / "backend" / ".env"
+load_dotenv(dotenv_path=_backend_env_path, override=False)
+
 from config import Config
 from routes.erp_routes import erp_bp
 from routes.local_routes import local_bp
@@ -6,8 +14,6 @@ from routes.notify_routes import notify_bp
 from routes.web_routes import web_bp
 from database.local_connection import init_local_db
 from repositories.local_access_repository import LocalAccessRepository
-import os
-import logging
 
 def create_app():
     app = Flask(__name__)

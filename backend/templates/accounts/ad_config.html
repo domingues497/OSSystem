@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Configuração AD</title>
+</head>
+<body style="font-family: Arial, sans-serif; background:#f6f7fb; margin:0;">
+  <form method="post" style="display:none;">{% csrf_token %}</form>
+  <div style="max-width: 1100px; margin: 24px auto; padding: 0 16px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap: 12px; margin-bottom: 14px;">
+      <h1 style="margin:0; font-size: 18px; color:#1a73e8;">Configuração do Active Directory</h1>
+      <div style="display:flex; gap: 8px; align-items:center;">
+        <a href="/logout/" style="font-size: 13px; text-decoration:none; color:#5f6368;">Sair</a>
+      </div>
+    </div>
+
+    <div style="background:#fff; border:1px solid #e7e7ef; border-radius:12px; padding: 16px;">
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <label style="font-size: 12px; color:#555;">Host/IP</label>
+          <input id="ad-host" type="text" style="width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:8px;">
+        </div>
+        <div>
+          <label style="font-size: 12px; color:#555;">Porta</label>
+          <input id="ad-port" type="number" value="389" style="width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:8px;">
+        </div>
+        <div>
+          <label style="font-size: 12px; color:#555;">Base DN</label>
+          <input id="ad-base-dn" type="text" placeholder="DC=empresa,DC=local" style="width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:8px;">
+        </div>
+        <div>
+          <label style="font-size: 12px; color:#555;">Bind DN</label>
+          <input id="ad-bind-dn" type="text" placeholder="CN=svc,OU=Servicos,DC=empresa,DC=local" style="width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:8px;">
+        </div>
+        <div>
+          <label style="font-size: 12px; color:#555;">Senha (conta de serviço)</label>
+          <input id="ad-bind-pass" type="password" style="width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:8px;">
+        </div>
+        <div style="display:flex; align-items:flex-end; gap: 10px;">
+          <label style="display:flex; align-items:center; gap: 8px; font-size: 13px; color:#444;">
+            <input id="ad-use-ssl" type="checkbox">
+            Usar SSL (LDAPS)
+          </label>
+        </div>
+        <div>
+          <label style="font-size: 12px; color:#555;">DN de busca de grupos (opcional)</label>
+          <input id="ad-group-search-dn" type="text" placeholder="OU=Grupos,DC=empresa,DC=local" style="width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:8px;">
+        </div>
+        <div>
+          <label style="font-size: 12px; color:#555;">ObjectClass de grupo</label>
+          <input id="ad-group-objclass" type="text" value="group" style="width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:8px;">
+        </div>
+        <div>
+          <label style="font-size: 12px; color:#555;">Atributo do nome do grupo</label>
+          <input id="ad-group-name-attr" type="text" value="cn" style="width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:8px;">
+        </div>
+        <div style="display:flex; align-items:flex-end;">
+          <label style="display:flex; align-items:center; gap: 8px; font-size: 13px; color:#444;">
+            <input id="ad-mirror-groups" type="checkbox">
+            Sincronizar grupos do AD no Django (mirror)
+          </label>
+        </div>
+      </div>
+
+      <div style="display:flex; gap: 10px; align-items:center; margin-top: 14px; flex-wrap: wrap;">
+        <button id="btn-test" type="button" style="padding:10px 12px; border-radius:8px; border:1px solid #1a73e8; background:#e8f0fe; color:#1a73e8; font-weight:700; cursor:pointer;">
+          Testar conexão
+        </button>
+        <button id="btn-load-groups" type="button" disabled style="padding:10px 12px; border-radius:8px; border:1px solid #ddd; background:#f1f3f4; color:#444; font-weight:700; cursor:pointer;">
+          Carregar grupos
+        </button>
+        <button id="btn-save" type="button" style="padding:10px 12px; border-radius:8px; border:none; background:#1a73e8; color:#fff; font-weight:700; cursor:pointer;">
+          Salvar
+        </button>
+        <span id="status" style="font-size: 13px; color:#5f6368;"></span>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px;">
+      <div style="background:#fff; border:1px solid #e7e7ef; border-radius:12px; padding: 16px;">
+        <h2 style="margin:0 0 10px 0; font-size: 14px; color:#444;">Grupos encontrados</h2>
+        <select id="ad-groups" multiple size="14" style="width:100%; border:1px solid #ddd; border-radius:8px; padding: 10px; font-size: 13px;"></select>
+      </div>
+      <div style="background:#fff; border:1px solid #e7e7ef; border-radius:12px; padding: 16px;">
+        <h2 style="margin:0 0 10px 0; font-size: 14px; color:#444;">Mapeamento de acesso</h2>
+
+        <div style="display:flex; flex-direction:column; gap: 10px;">
+          <div>
+            <label style="font-size: 12px; color:#555;">Grupo obrigatório para acessar (AUTH_LDAP_REQUIRE_GROUP)</label>
+            <div id="ad-require-group" style="width:100%; border:1px solid #ddd; border-radius:8px; padding: 10px; max-height: 180px; overflow:auto; background:#fff;"></div>
+          </div>
+          <div>
+            <label style="font-size: 12px; color:#555;">Grupo de bloqueio (AUTH_LDAP_DENY_GROUP)</label>
+            <div id="ad-deny-group" style="width:100%; border:1px solid #ddd; border-radius:8px; padding: 10px; max-height: 180px; overflow:auto; background:#fff;"></div>
+          </div>
+          <div>
+            <label style="font-size: 12px; color:#555;">Grupos Staff/Admin (is_staff)</label>
+            <div id="ad-staff-groups" style="width:100%; border:1px solid #ddd; border-radius:8px; padding: 10px; max-height: 180px; overflow:auto; background:#fff;"></div>
+          </div>
+          <div>
+            <label style="font-size: 12px; color:#555;">Grupos Superuser (is_superuser)</label>
+            <div id="ad-superuser-groups" style="width:100%; border:1px solid #ddd; border-radius:8px; padding: 10px; max-height: 180px; overflow:auto; background:#fff;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function getCookie(name) {
+      const cookies = document.cookie ? document.cookie.split(';') : [];
+      for (let i = 0; i < cookies.length; i++) {
+        const c = cookies[i].trim();
+        if (c.startsWith(name + '=')) return decodeURIComponent(c.substring(name.length + 1));
+      }
+      return '';
+    }
+
+    function setStatus(text, ok = null) {
+      const el = document.getElementById('status');
+      el.textContent = text || '';
+      if (ok === true) el.style.color = '#137333';
+      else if (ok === false) el.style.color = '#b00020';
+      else el.style.color = '#5f6368';
+    }
+
+    function payloadFromForm(includePassword = true) {
+      const p = {
+        host: document.getElementById('ad-host').value.trim(),
+        port: parseInt(document.getElementById('ad-port').value || '389', 10),
+        use_ssl: document.getElementById('ad-use-ssl').checked,
+        base_dn: document.getElementById('ad-base-dn').value.trim(),
+        bind_dn: document.getElementById('ad-bind-dn').value.trim(),
+        group_search_dn: document.getElementById('ad-group-search-dn').value.trim(),
+        group_object_class: document.getElementById('ad-group-objclass').value.trim() || 'group',
+        group_name_attr: document.getElementById('ad-group-name-attr').value.trim() || 'cn',
+        mirror_groups: document.getElementById('ad-mirror-groups').checked,
+      };
+      if (includePassword) p.bind_password = document.getElementById('ad-bind-pass').value;
+      return p;
+    }
+
+    function listSelected(selectId) {
+      const el = document.getElementById(selectId);
+      return Array.from(el.selectedOptions).map(o => o.value);
+    }
+
+    function listChecked(containerId) {
+      const el = document.getElementById(containerId);
+      return Array.from(el.querySelectorAll('input[type="checkbox"]:checked')).map(i => i.value);
+    }
+
+    function setOptions(select, groups, includeEmpty = true) {
+      const cur = select.value;
+      select.innerHTML = '';
+      if (includeEmpty) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = 'Nenhum';
+        select.appendChild(opt);
+      }
+      for (const g of groups) {
+        const opt = document.createElement('option');
+        opt.value = g.dn;
+        opt.textContent = `${g.name} (${g.dn})`;
+        select.appendChild(opt);
+      }
+      if (cur) select.value = cur;
+    }
+
+    function setMultiOptions(select, groups, selectedDns) {
+      const setSel = new Set((selectedDns || []).map(String));
+      select.innerHTML = '';
+      for (const g of groups) {
+        const opt = document.createElement('option');
+        opt.value = g.dn;
+        opt.textContent = `${g.name} (${g.dn})`;
+        opt.selected = setSel.has(String(g.dn));
+        select.appendChild(opt);
+      }
+    }
+
+    function setCheckboxOptions(container, groups, selectedDns) {
+      const setSel = new Set((selectedDns || []).map(String));
+      container.innerHTML = '';
+      for (const g of groups) {
+        const row = document.createElement('label');
+        row.style.display = 'flex';
+        row.style.alignItems = 'center';
+        row.style.gap = '8px';
+        row.style.fontSize = '13px';
+        row.style.color = '#333';
+        row.style.padding = '4px 0';
+
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.value = g.dn;
+        input.checked = setSel.has(String(g.dn));
+
+        const text = document.createElement('span');
+        text.textContent = `${g.name} (${g.dn})`;
+
+        row.appendChild(input);
+        row.appendChild(text);
+        container.appendChild(row);
+      }
+    }
+
+    let lastGroups = [];
+
+    async function loadCurrentConfig() {
+      const res = await fetch('/api/accounts/ad/config/', { credentials: 'include' });
+      if (!res.ok) return;
+      const data = await res.json();
+      document.getElementById('ad-host').value = data.host || '';
+      document.getElementById('ad-port').value = data.port || 389;
+      document.getElementById('ad-use-ssl').checked = !!data.use_ssl;
+      document.getElementById('ad-base-dn').value = data.base_dn || '';
+      document.getElementById('ad-bind-dn').value = data.bind_dn || '';
+      document.getElementById('ad-group-search-dn').value = data.group_search_dn || '';
+      document.getElementById('ad-group-objclass').value = data.group_object_class || 'group';
+      document.getElementById('ad-group-name-attr').value = data.group_name_attr || 'cn';
+      document.getElementById('ad-mirror-groups').checked = !!data.mirror_groups;
+      document.getElementById('ad-bind-pass').value = '';
+      setStatus(data.has_bind_password ? 'Config carregada. Senha já salva (não exibida).' : 'Config carregada.');
+
+      if (Array.isArray(data.staff_group_dns) || Array.isArray(data.superuser_group_dns) || Array.isArray(data.require_group_dns) || Array.isArray(data.deny_group_dns) || data.require_group_dn || data.deny_group_dn) {
+        document.getElementById('ad-require-group').dataset.values = JSON.stringify(data.require_group_dns || (data.require_group_dn ? [data.require_group_dn] : []));
+        document.getElementById('ad-deny-group').dataset.values = JSON.stringify(data.deny_group_dns || (data.deny_group_dn ? [data.deny_group_dn] : []));
+        document.getElementById('ad-staff-groups').dataset.values = JSON.stringify(data.staff_group_dns || []);
+        document.getElementById('ad-superuser-groups').dataset.values = JSON.stringify(data.superuser_group_dns || []);
+      }
+    }
+
+    async function testConnection() {
+      setStatus('Testando conexão...', null);
+      const btn = document.getElementById('btn-test');
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/accounts/ad/test/', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken'),
+          },
+          body: JSON.stringify(payloadFromForm(true)),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) throw new Error(data.error || 'Falha no teste');
+        setStatus('Conectado com sucesso.', true);
+        const loadBtn = document.getElementById('btn-load-groups');
+        loadBtn.disabled = false;
+        loadBtn.style.borderColor = '#1a73e8';
+        loadBtn.style.background = '#e8f0fe';
+      } catch (e) {
+        setStatus(String(e && e.message ? e.message : e), false);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function loadGroups() {
+      setStatus('Carregando grupos...', null);
+      const btn = document.getElementById('btn-load-groups');
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/accounts/ad/groups/', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken'),
+          },
+          body: JSON.stringify(payloadFromForm(true)),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) throw new Error(data.error || 'Falha ao listar grupos');
+        lastGroups = data.groups || [];
+
+        const allSelect = document.getElementById('ad-groups');
+        allSelect.innerHTML = '';
+        for (const g of lastGroups) {
+          const opt = document.createElement('option');
+          opt.value = g.dn;
+          opt.textContent = `${g.name} (${g.dn})`;
+          allSelect.appendChild(opt);
+        }
+
+        const requireSel = document.getElementById('ad-require-group');
+        const denySel = document.getElementById('ad-deny-group');
+        const staffSel = document.getElementById('ad-staff-groups');
+        const superSel = document.getElementById('ad-superuser-groups');
+
+        const savedRequire = JSON.parse(requireSel.dataset.values || '[]');
+        const savedDeny = JSON.parse(denySel.dataset.values || '[]');
+        const savedStaff = JSON.parse(staffSel.dataset.values || '[]');
+        const savedSuper = JSON.parse(superSel.dataset.values || '[]');
+
+        setCheckboxOptions(requireSel, lastGroups, savedRequire);
+        setCheckboxOptions(denySel, lastGroups, savedDeny);
+        setCheckboxOptions(staffSel, lastGroups, savedStaff);
+        setCheckboxOptions(superSel, lastGroups, savedSuper);
+
+        setStatus(`Grupos carregados: ${lastGroups.length}`, true);
+      } catch (e) {
+        setStatus(String(e && e.message ? e.message : e), false);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function saveConfig() {
+      setStatus('Salvando...', null);
+      const btn = document.getElementById('btn-save');
+      btn.disabled = true;
+      try {
+        const p = payloadFromForm(false);
+        const pass = document.getElementById('ad-bind-pass').value;
+        if (pass) p.bind_password = pass;
+
+        p.require_group_dns = listChecked('ad-require-group');
+        p.deny_group_dns = listChecked('ad-deny-group');
+        p.staff_group_dns = listChecked('ad-staff-groups');
+        p.superuser_group_dns = listChecked('ad-superuser-groups');
+
+        const res = await fetch('/api/accounts/ad/config/', {
+          method: 'PUT',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken'),
+          },
+          body: JSON.stringify(p),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) throw new Error(data.error || 'Falha ao salvar');
+        setStatus('Configuração salva.', true);
+      } catch (e) {
+        setStatus(String(e && e.message ? e.message : e), false);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    document.getElementById('btn-test').addEventListener('click', testConnection);
+    document.getElementById('btn-load-groups').addEventListener('click', loadGroups);
+    document.getElementById('btn-save').addEventListener('click', saveConfig);
+
+    loadCurrentConfig();
+  </script>
+</body>
+</html>

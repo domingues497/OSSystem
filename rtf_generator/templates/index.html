@@ -13,7 +13,7 @@
         <div class="dashboard-header" style="margin-bottom: 1.5rem; border-bottom: 1px solid #eee; padding-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
             <div style="display: flex; align-items: center; gap: 15px;">
                 <h1 id="dashboard-title" style="margin: 0; font-size: 1.5rem; color: #1a73e8; cursor: pointer;">Dashboard</h1>
-                <div style="display: flex; gap: 8px;">
+                <div class="dashboard-actions" style="display: flex; gap: 8px;">
                     <a href="/chamados" class="btn-icon" title="Filtrar Chamados" style="background: #1a73e8; color: white; border: none; width: 32px; height: 32px; border-radius: 6px; cursor: pointer;">
                         <i class="fas fa-search"></i>
                     </a>
@@ -23,10 +23,15 @@
                 </div>
             </div>
 
-            <div class="filter-bar" style="margin: 0; padding: 5px 12px; background: #f8faff; border-radius: 10px; border: 1px solid #e1e8f5; display: flex; align-items: center; gap: 10px;">
+            <div id="dashboard-filters" class="filter-bar" style="margin: 0; padding: 5px 12px; background: #f8faff; border-radius: 10px; border: 1px solid #e1e8f5; display: flex; align-items: center; gap: 10px;">
                 <div class="refresh-group" style="border-right: 1px solid #ddd; padding-right: 10px; margin-right: 5px; display: flex; align-items: center; gap: 5px;">
                     <button id="toggle-sound" onclick="toggleSound()" class="btn-icon" title="Ativar/Desativar Som" style="width: 28px; height: 28px; border: 1px solid #ddd; border-radius: 4px;">
                         <i class="fas fa-volume-up"></i>
+                    </button>
+                </div>
+                <div class="refresh-group" style="border-right: 1px solid #ddd; padding-right: 10px; margin-right: 5px; display: flex; align-items: center; gap: 5px;">
+                    <button id="toggle-tv-mode" onclick="toggleTvMode()" class="btn-icon" title="Modo TV" style="width: 28px; height: 28px; border: 1px solid #ddd; border-radius: 4px;">
+                        <i class="fas fa-tv"></i>
                     </button>
                 </div>
                 <div class="refresh-group" style="border-right: 1px solid #ddd; padding-right: 10px; margin-right: 5px; display: flex; align-items: center; gap: 5px;">
@@ -96,6 +101,15 @@
                     <i class="fas fa-clock"></i> Chamados Aguardando 1º Atendimento (SLA 30min)
                 </h3>
                 <div id="pending-grid" class="pending-grid">
+                    <!-- Cards via JS -->
+                </div>
+            </div>
+
+            <div id="trello-missing-section" class="pending-section" style="display: none;">
+                <h3 style="font-size: 1rem; color: #e65100; margin: 0; display: flex; align-items: center; gap: 8px;">
+                    <i class="fab fa-trello"></i> Integrados no Trello sem Rótulo
+                </h3>
+                <div id="trello-missing-grid" class="pending-grid">
                     <!-- Cards via JS -->
                 </div>
             </div>
@@ -173,6 +187,8 @@
         let refreshTimer = null;
         let pendingTickets = [];
         let lastOpenCount = null;
+        let tvModeEnabled = localStorage.getItem('tv-mode-enabled') === 'true';
+        let wakeLock = null;
         
         // Carregar configurações do localStorage
         let soundEnabled = localStorage.getItem('dash-sound-enabled') === 'true';
@@ -197,6 +213,16 @@
                 btnSound.classList.toggle('active', soundEnabled);
                 btnSound.innerHTML = soundEnabled ? '<i class="fas fa-volume-up"></i>' : '<i class="fas fa-volume-mute"></i>';
             }
+
+            updateTvModeButton();
+            applyTvModeUI();
+            if (tvModeEnabled) {
+                requestWakeLock();
+            }
+        }
+
+        function applyTvModeUI() {
+            document.body.classList.toggle('tv-mode', tvModeEnabled);
         }
 
         function toggleSound() {
@@ -212,6 +238,64 @@
                 audio.play().catch(e => console.log("Aguardando interação para som"));
             }
         }
+
+        function updateTvModeButton() {
+            const btn = document.getElementById('toggle-tv-mode');
+            if (!btn) return;
+            btn.classList.toggle('active', tvModeEnabled);
+            btn.title = tvModeEnabled ? 'Modo TV (ativo)' : 'Modo TV';
+        }
+
+        async function requestWakeLock() {
+            if (!tvModeEnabled) return;
+            if (!('wakeLock' in navigator)) return;
+            try {
+                if (wakeLock) return;
+                wakeLock = await navigator.wakeLock.request('screen');
+                wakeLock.addEventListener('release', () => {
+                    wakeLock = null;
+                    if (tvModeEnabled) updateTvModeButton();
+                });
+                updateTvModeButton();
+            } catch (e) {
+                wakeLock = null;
+                updateTvModeButton();
+            }
+        }
+
+        function releaseWakeLock() {
+            try {
+                if (wakeLock) wakeLock.release();
+            } catch (e) { }
+            wakeLock = null;
+        }
+
+        async function toggleTvMode() {
+            tvModeEnabled = !tvModeEnabled;
+            localStorage.setItem('tv-mode-enabled', tvModeEnabled);
+            updateTvModeButton();
+            applyTvModeUI();
+            if (tvModeEnabled) {
+                await requestWakeLock();
+            } else {
+                releaseWakeLock();
+            }
+        }
+
+        document.addEventListener('keydown', (event) => {
+            const tag = (document.activeElement && document.activeElement.tagName ? document.activeElement.tagName : '').toUpperCase();
+            if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return;
+            if (event.key === 't' || event.key === 'T') {
+                toggleTvMode();
+            } else if (event.key === 'Escape' && tvModeEnabled) {
+                toggleTvMode();
+            }
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (!tvModeEnabled) return;
+            if (document.visibilityState === 'visible') requestWakeLock();
+        });
 
                 const statusColors = {
                     'Aberta': '#c1f7c1',
@@ -374,6 +458,7 @@
 
                 renderHistoryChart(data.historico);
                 await carregarPendentes();
+                await carregarTrelloSemRotulo();
             } catch (e) { 
                 console.error('Erro dashboard', e); 
             }
@@ -383,6 +468,17 @@
             const res = await fetch('/api/erp/chamados_pendentes');
             pendingTickets = await res.json();
             renderGrid('pending-section', 'pending-grid', pendingTickets, true);
+        }
+
+        async function carregarTrelloSemRotulo() {
+            try {
+                const res = await fetch('/api/erp/trello_sem_rotulo?limit=30');
+                const trelloMissing = await res.json();
+                renderGrid('trello-missing-section', 'trello-missing-grid', trelloMissing, false, 'TRELLO');
+            } catch (e) {
+                const section = document.getElementById('trello-missing-section');
+                if (section) section.style.display = 'none';
+            }
         }
 
         function renderGrid(sectionId, gridId, tickets, withSLA = false, badge = '') {
@@ -438,7 +534,7 @@
                     <div class="details-grid">
                         <div>
                             ${data.criador ? `<p><strong>Criador por:</strong> ${data.criador}</p>` : ``}
-                            <p><strong>Solicitante:</strong> ${data.solicitante || 'N/A'}</p>
+                            <p><strong>Solicitante:</strong> ${(data.cod_usuario ? `${data.cod_usuario} - ` : '')}${data.solicitante || 'N/A'}</p>
                             <p><strong>Título:</strong> ${data.titulo_solicitacao}</p>
                             <p><strong>Descrição:</strong><br><div class="description-text">${data.descr_solicitacao}</div></p>
                             <p><strong>Ativo:</strong> ${data.descr_ativo || 'N/A'}</p>

@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Comissões</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+    <form id="csrf-form" class="hidden">{% csrf_token %}</form>
+    
+    <!-- Navbar -->
+    <nav class="bg-green-400 p-4 text-white flex justify-between items-center shadow-md print:hidden">
+        <h1 class="text-xl font-bold">Gestão de Comissões</h1>
+        <div class="flex gap-4 items-center">
+            <span>{{ request.user.username }}</span>
+            <form action="/logout/" method="post" class="inline">
+                {% csrf_token %}
+                <button type="submit" class="bg-red-500 hover:bg-red-600 px-3 py-1 rounded text-sm transition">Sair</button>
+            </form>
+        </div>
+    </nav>
+
+    <!-- App Container with Alpine.js -->
+    <div class="container mx-auto p-6" x-data="commissionsApp()">
+        
+        <div class="flex justify-between items-center mb-6 print:hidden">
+            <h2 class="text-2xl font-bold text-gray-800">Dashboard</h2>
+            <div class="flex gap-2">
+                {% if request.user.is_staff or request.user.is_superuser %}
+                <button @click="openConsultorModal()" class="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded shadow transition">
+                    + Consultor
+                </button>
+                <button @click="openComissaoModal()" class="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded shadow transition">
+                    + Comissão
+                </button>
+                {% endif %}
+                <button @click="window.print()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow transition flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                Exportar Relatório
+                </button>
+            </div>
+        </div>
+
+        <!-- Print Only Header -->
+        <div class="hidden print:block mb-6 text-center">
+            <h1 class="text-2xl font-bold">Relatório de Comissões</h1>
+            <p class="text-gray-500">Gerado em: <span x-text="new Date().toLocaleDateString('pt-BR')"></span></p>
+        </div>
+
+        <!-- Loading State -->
+        <div x-show="loading" class="text-center py-10 print:hidden">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p class="mt-3 text-gray-600">Carregando dados...</p>
+        </div>
+
+        <!-- Table -->
+        <div x-show="!loading" class="bg-white rounded-lg shadow overflow-hidden" style="display: none;">
+            <div class="overflow-x-auto">
+                <table class="w-full whitespace-nowrap">
+                    <thead class="bg-gray-50 border-b border-gray-200 text-gray-700">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Consultor</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Valor Total</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Recebido</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Saldo Pendente</th>
+                            <th class="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider print:hidden">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+                        <template x-for="comissao in comissoes" :key="comissao.id">
+                            <tr class="hover:bg-gray-50 transition">
+                                <td class="px-6 py-4">
+                                    <div class="font-medium text-gray-900" x-text="comissao.consultor.nome"></div>
+                                    <div class="text-sm text-gray-500" x-text="comissao.consultor.email"></div>
+                                </td>
+                                <td class="px-6 py-4 text-gray-700 font-semibold" x-text="formatCurrency(comissao.valor_total)"></td>
+                                <td class="px-6 py-4 text-green-600 font-semibold" x-text="formatCurrency(comissao.valor_recebido)"></td>
+                                <td class="px-6 py-4 font-bold" 
+                                    :class="comissao.saldo_pendente > 0 ? 'text-orange-500' : 'text-gray-400'"
+                                    x-text="formatCurrency(comissao.saldo_pendente)">
+                                </td>
+                                <td class="px-6 py-4 text-center print:hidden">
+                                    <div class="flex items-center justify-center gap-2">
+                                        <button @click="toggleRecebimentos(comissao.id)" 
+                                                class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1 rounded shadow-sm text-sm font-medium transition">
+                                            Notas (<span x-text="(comissao.recebimentos || []).length"></span>)
+                                        </button>
+                                        <button @click="openModal(comissao)" 
+                                                class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1 rounded shadow-sm text-sm font-medium transition"
+                                                :disabled="comissao.saldo_pendente <= 0"
+                                                :class="comissao.saldo_pendente <= 0 ? 'opacity-50 cursor-not-allowed' : ''">
+                                            + Adicionar Nota
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr x-show="expandedComissaoId === comissao.id" class="bg-slate-50">
+                                <td colspan="5" class="px-6 py-4">
+                                    <div class="flex items-center justify-between mb-3">
+                                        <div class="text-sm font-semibold text-slate-800">
+                                            Recebimentos (NF)
+                                        </div>
+                                        <button @click="toggleRecebimentos(comissao.id)" class="text-sm text-slate-600 hover:text-slate-900">
+                                            Fechar
+                                        </button>
+                                    </div>
+
+                                    <div x-show="(comissao.recebimentos || []).length === 0" class="text-sm text-slate-500 bg-white rounded border border-slate-200 p-4" style="display: none;">
+                                        Nenhuma nota cadastrada para esta comissão.
+                                    </div>
+
+                                    <div x-show="(comissao.recebimentos || []).length > 0" class="overflow-x-auto rounded border border-slate-200 bg-white" style="display: none;">
+                                        <table class="w-full text-sm">
+                                            <thead class="bg-slate-100 text-slate-700">
+                                                <tr>
+                                                    <th class="px-3 py-2 text-left font-semibold">NF</th>
+                                                    <th class="px-3 py-2 text-left font-semibold">Data</th>
+                                                    <th class="px-3 py-2 text-left font-semibold">Valor</th>
+                                                    <th class="px-3 py-2 text-left font-semibold">Descrição</th>
+                                                    <th class="px-3 py-2 text-left font-semibold">Observações</th>
+                                                    <th class="px-3 py-2 text-left font-semibold">Lançado</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-slate-100">
+                                                <template x-for="r in sortRecebimentos(comissao.recebimentos || [])" :key="r.id">
+                                                    <tr>
+                                                        <td class="px-3 py-2 font-medium text-slate-900" x-text="r.numero_nota"></td>
+                                                        <td class="px-3 py-2 text-slate-700" x-text="formatDate(r.data_nota)"></td>
+                                                        <td class="px-3 py-2 text-slate-700 font-semibold" x-text="formatCurrency(r.valor_pago)"></td>
+                                                        <td class="px-3 py-2 text-slate-700" x-text="r.descricao || '-'"></td>
+                                                        <td class="px-3 py-2 text-slate-700" x-text="r.observacoes || '-'"></td>
+                                                        <td class="px-3 py-2 text-slate-600" x-text="formatDateTime(r.created_at)"></td>
+                                                    </tr>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </td>
+                            </tr>
+                        </template>
+                        <tr x-show="comissoes.length === 0">
+                            <td colspan="5" class="px-6 py-8 text-center text-gray-500">Nenhuma comissão encontrada.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Modal Nova Nota -->
+        <div x-show="modalOpen" class="fixed inset-0 z-50 overflow-y-auto print:hidden" style="display: none;" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+            <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                
+                <!-- Background overlay -->
+                <div x-show="modalOpen" x-transition.opacity class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="closeModal()" aria-hidden="true"></div>
+
+                <!-- Modal panel -->
+                <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+                <div x-show="modalOpen" 
+                     x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+                     x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                     class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full">
+                    
+                    <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                        <div class="sm:flex sm:items-start">
+                            <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                                <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">
+                                    Adicionar Recebimento (NF)
+                                </h3>
+                                <div class="mt-2">
+                                    <p class="text-sm text-gray-500 mb-4">
+                                        Consultor: <span class="font-bold" x-text="selectedComissao?.consultor?.nome"></span><br>
+                                        Saldo Pendente: <span class="font-bold text-orange-500" x-text="formatCurrency(selectedComissao?.saldo_pendente)"></span>
+                                    </p>
+
+                                    <!-- Form Error -->
+                                    <div x-show="formError" class="mb-4 bg-red-50 border-l-4 border-red-500 p-4">
+                                        <p class="text-sm text-red-700" x-text="formError"></p>
+                                    </div>
+
+                                    <form @submit.prevent="submitNota" class="space-y-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700">Nº da Nota Fiscal</label>
+                                            <input type="text" x-model="formData.numero_nota" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700">Data da Nota</label>
+                                            <input type="date" x-model="formData.data_nota" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700">Valor Pago (R$)</label>
+                                            <input type="number" step="0.01" min="0.01" :max="selectedComissao?.saldo_pendente" x-model="formData.valor_pago" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700">Descrição</label>
+                                            <input type="text" x-model="formData.descricao" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700">Observações</label>
+                                            <textarea rows="3" x-model="formData.observacoes" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"></textarea>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                        <button type="button" @click="submitNota" :disabled="submitting" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50">
+                            <span x-show="!submitting">Salvar</span>
+                            <span x-show="submitting">Salvando...</span>
+                        </button>
+                        <button type="button" @click="closeModal()" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div x-show="consultorModalOpen" class="fixed inset-0 z-50 overflow-y-auto print:hidden" style="display: none;" role="dialog" aria-modal="true">
+            <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                <div x-show="consultorModalOpen" x-transition.opacity class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="closeConsultorModal()" aria-hidden="true"></div>
+                <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+                <div x-show="consultorModalOpen"
+                     x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+                     x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                     class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full">
+                    <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                        <div class="w-full">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900">
+                                Cadastrar Consultor
+                            </h3>
+                            <div class="mt-4">
+                                <div x-show="consultorFormError" class="mb-4 bg-red-50 border-l-4 border-red-500 p-4">
+                                    <p class="text-sm text-red-700" x-text="consultorFormError"></p>
+                                </div>
+                                <form @submit.prevent="submitConsultor" class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Nome</label>
+                                        <input type="text" x-model="consultorForm.nome" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Email</label>
+                                        <input type="email" x-model="consultorForm.email" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Telefone</label>
+                                        <input type="text" x-model="consultorForm.telefone" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                        <button type="button" @click="submitConsultor" :disabled="consultorSubmitting" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-slate-700 text-base font-medium text-white hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50">
+                            <span x-show="!consultorSubmitting">Salvar</span>
+                            <span x-show="consultorSubmitting">Salvando...</span>
+                        </button>
+                        <button type="button" @click="closeConsultorModal()" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div x-show="comissaoModalOpen" class="fixed inset-0 z-50 overflow-y-auto print:hidden" style="display: none;" role="dialog" aria-modal="true">
+            <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                <div x-show="comissaoModalOpen" x-transition.opacity class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="closeComissaoModal()" aria-hidden="true"></div>
+                <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+                <div x-show="comissaoModalOpen"
+                     x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+                     x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                     class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full">
+                    <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                        <div class="w-full">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900">
+                                Cadastrar Comissão
+                            </h3>
+                            <div class="mt-4">
+                                <div x-show="comissaoFormError" class="mb-4 bg-red-50 border-l-4 border-red-500 p-4">
+                                    <p class="text-sm text-red-700" x-text="comissaoFormError"></p>
+                                </div>
+                                <form @submit.prevent="submitComissao" class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Consultor</label>
+                                        <select x-model="comissaoForm.consultor_id" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                            <option value="" disabled>Selecione um consultor</option>
+                                            <template x-for="c in consultores" :key="c.id">
+                                                <option :value="c.id" x-text="c.nome"></option>
+                                            </template>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Valor Total (R$)</label>
+                                        <input type="number" step="0.01" min="0.01" x-model="comissaoForm.valor_total" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                        <button type="button" @click="submitComissao" :disabled="comissaoSubmitting" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-slate-700 text-base font-medium text-white hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50">
+                            <span x-show="!comissaoSubmitting">Salvar</span>
+                            <span x-show="comissaoSubmitting">Salvando...</span>
+                        </button>
+                        <button type="button" @click="closeComissaoModal()" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        function getCsrfToken() {
+            const fromCookie = getCookie('csrftoken');
+            if (fromCookie) return fromCookie;
+            const el = document.querySelector('#csrf-form input[name=csrfmiddlewaretoken]');
+            if (el && el.value) return el.value;
+            return '';
+        }
+
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('commissionsApp', () => ({
+                comissoes: [],
+                consultores: [],
+                loading: true,
+                modalOpen: false,
+                consultorModalOpen: false,
+                comissaoModalOpen: false,
+                selectedComissao: null,
+                expandedComissaoId: null,
+                formError: '',
+                submitting: false,
+                consultorFormError: '',
+                consultorSubmitting: false,
+                comissaoFormError: '',
+                comissaoSubmitting: false,
+                formData: {
+                    numero_nota: '',
+                    data_nota: new Date().toISOString().split('T')[0],
+                    valor_pago: '',
+                    descricao: '',
+                    observacoes: ''
+                },
+                consultorForm: {
+                    nome: '',
+                    email: '',
+                    telefone: ''
+                },
+                comissaoForm: {
+                    consultor_id: '',
+                    valor_total: ''
+                },
+
+                init() {
+                    this.fetchConsultores();
+                    this.fetchComissoes();
+                },
+
+                async fetchConsultores() {
+                    try {
+                        const response = await fetch('/api/commissions/consultores/', { credentials: 'same-origin' });
+                        if (!response.ok) throw new Error('Erro ao buscar consultores');
+                        this.consultores = await response.json();
+                    } catch (error) {
+                        console.error(error);
+                        this.consultores = [];
+                    }
+                },
+
+                async fetchComissoes() {
+                    this.loading = true;
+                    try {
+                        const response = await fetch('/api/commissions/comissoes/', { credentials: 'same-origin' });
+                        if (!response.ok) throw new Error('Erro ao buscar dados');
+                        this.comissoes = await response.json();
+                    } catch (error) {
+                        console.error(error);
+                        alert('Falha ao carregar as comissões.');
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                formatCurrency(value) {
+                    const num = parseFloat(value);
+                    if (isNaN(num)) return 'R$ 0,00';
+                    return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                },
+
+                formatDate(value) {
+                    if (!value) return '';
+                    const s = String(value);
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+                        const [y, m, d] = s.split('-');
+                        return `${d}/${m}/${y}`;
+                    }
+                    const dt = new Date(s);
+                    if (isNaN(dt.getTime())) return s;
+                    return dt.toLocaleDateString('pt-BR');
+                },
+
+                formatDateTime(value) {
+                    if (!value) return '';
+                    const dt = new Date(String(value));
+                    if (isNaN(dt.getTime())) return String(value);
+                    return dt.toLocaleString('pt-BR');
+                },
+
+                sortRecebimentos(list) {
+                    const arr = Array.isArray(list) ? [...list] : [];
+                    arr.sort((a, b) => {
+                        const da = new Date(String(a?.created_at || '')).getTime();
+                        const db = new Date(String(b?.created_at || '')).getTime();
+                        if (!isNaN(da) && !isNaN(db) && da !== db) return db - da;
+                        const na = String(a?.numero_nota || '');
+                        const nb = String(b?.numero_nota || '');
+                        return nb.localeCompare(na);
+                    });
+                    return arr;
+                },
+
+                toggleRecebimentos(comissaoId) {
+                    if (this.expandedComissaoId === comissaoId) {
+                        this.expandedComissaoId = null;
+                        return;
+                    }
+                    this.expandedComissaoId = comissaoId;
+                },
+
+                openModal(comissao) {
+                    this.selectedComissao = comissao;
+                    this.formError = '';
+                    this.formData = {
+                        numero_nota: '',
+                        data_nota: new Date().toISOString().split('T')[0],
+                        valor_pago: '',
+                        descricao: '',
+                        observacoes: ''
+                    };
+                    this.modalOpen = true;
+                },
+
+                closeModal() {
+                    this.modalOpen = false;
+                    this.selectedComissao = null;
+                },
+
+                openConsultorModal() {
+                    this.consultorFormError = '';
+                    this.consultorForm = { nome: '', email: '', telefone: '' };
+                    this.consultorModalOpen = true;
+                },
+
+                closeConsultorModal() {
+                    this.consultorModalOpen = false;
+                },
+
+                async submitConsultor() {
+                    if (!this.consultorForm.nome) {
+                        this.consultorFormError = 'Informe o nome.';
+                        return;
+                    }
+
+                    this.consultorSubmitting = true;
+                    this.consultorFormError = '';
+
+                    try {
+                        const response = await fetch('/api/commissions/consultores/', {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': getCsrfToken()
+                            },
+                            body: JSON.stringify({
+                                nome: this.consultorForm.nome,
+                                email: this.consultorForm.email,
+                                telefone: this.consultorForm.telefone
+                            })
+                        });
+
+                        const data = await response.json();
+                        if (!response.ok) {
+                            if (data.nome) throw new Error(data.nome[0]);
+                            throw new Error('Erro ao cadastrar consultor.');
+                        }
+
+                        this.closeConsultorModal();
+                        await this.fetchConsultores();
+                    } catch (error) {
+                        this.consultorFormError = error.message;
+                    } finally {
+                        this.consultorSubmitting = false;
+                    }
+                },
+
+                openComissaoModal() {
+                    this.comissaoFormError = '';
+                    this.comissaoForm = { consultor_id: '', valor_total: '' };
+                    this.comissaoModalOpen = true;
+                    if (!this.consultores.length) {
+                        this.fetchConsultores();
+                    }
+                },
+
+                closeComissaoModal() {
+                    this.comissaoModalOpen = false;
+                },
+
+                async submitComissao() {
+                    if (!this.comissaoForm.consultor_id || !this.comissaoForm.valor_total) {
+                        this.comissaoFormError = 'Preencha todos os campos.';
+                        return;
+                    }
+
+                    const valorTotal = parseFloat(this.comissaoForm.valor_total);
+                    if (isNaN(valorTotal) || valorTotal <= 0) {
+                        this.comissaoFormError = 'Informe um valor total válido.';
+                        return;
+                    }
+
+                    this.comissaoSubmitting = true;
+                    this.comissaoFormError = '';
+
+                    try {
+                        const response = await fetch('/api/commissions/comissoes/', {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': getCsrfToken()
+                            },
+                            body: JSON.stringify({
+                                consultor_id: this.comissaoForm.consultor_id,
+                                valor_total: valorTotal
+                            })
+                        });
+
+                        const data = await response.json();
+                        if (!response.ok) {
+                            if (data.valor_total) throw new Error(data.valor_total[0]);
+                            if (data.consultor_id) throw new Error(data.consultor_id[0]);
+                            throw new Error('Erro ao cadastrar comissão.');
+                        }
+
+                        this.closeComissaoModal();
+                        await this.fetchComissoes();
+                    } catch (error) {
+                        this.comissaoFormError = error.message;
+                    } finally {
+                        this.comissaoSubmitting = false;
+                    }
+                },
+
+                async submitNota() {
+                    if (!this.formData.numero_nota || !this.formData.data_nota || !this.formData.valor_pago) {
+                        this.formError = 'Preencha todos os campos.';
+                        return;
+                    }
+
+                    const valorPago = parseFloat(this.formData.valor_pago);
+                    const saldoPendente = parseFloat(this.selectedComissao.saldo_pendente);
+
+                    if (valorPago <= 0) {
+                        this.formError = 'O valor deve ser maior que zero.';
+                        return;
+                    }
+
+                    if (valorPago > saldoPendente) {
+                        this.formError = `Valor pago (R$ ${valorPago}) excede o saldo pendente (R$ ${saldoPendente}).`;
+                        return;
+                    }
+
+                    this.submitting = true;
+                    this.formError = '';
+
+                    try {
+                        const response = await fetch('/api/commissions/recebimentos/', {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': getCsrfToken()
+                            },
+                            body: JSON.stringify({
+                                comissao: this.selectedComissao.id,
+                                numero_nota: this.formData.numero_nota,
+                                data_nota: this.formData.data_nota,
+                                valor_pago: valorPago,
+                                descricao: this.formData.descricao,
+                                observacoes: this.formData.observacoes
+                            })
+                        });
+
+                        const data = await response.json();
+
+                        if (!response.ok) {
+                            // Tratar erros de validação da API (ex: nota duplicada)
+                            if (data.numero_nota) throw new Error(`Nota Fiscal: ${data.numero_nota[0]}`);
+                            if (data.error) throw new Error(data.error.join(', '));
+                            throw new Error('Erro ao salvar o recebimento.');
+                        }
+
+                        // Sucesso
+                        this.closeModal();
+                        this.fetchComissoes();
+                        
+                    } catch (error) {
+                        this.formError = error.message;
+                    } finally {
+                        this.submitting = false;
+                    }
+                }
+            }));
+        });
+    </script>
+</body>
+</html>

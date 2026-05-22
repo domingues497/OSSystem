@@ -156,15 +156,40 @@ class ERPRepository:
     def buscar_chamado_por_id(self, cod_solicitacao):
         conn = get_erp_connection()
         cur = conn.cursor()
-        cur.execute("""
+        text_col = self._get_text_col(cur)
+        cur.execute(f"""
             SELECT 
                 DM1744.PRIORIDADE, DM1744.COD_STATUS_DOC, DM1744.DATA_CAD, DM1744.HORA_CAD,
                 DM1744.DATA_INIC_ATEND, DM1744.HORA_INIC_ATEND, DM1744.DATA_BAIXA, DM1744.HORA_BAIXA,
-                DS0300.NOME_USUARIO as SOLICITANTE, DM1744.COD_SOLICITACAO, DM1744.TITULO_SOLICITACAO,
-                DM1744.DESCR_SOLICITACAO, DC1629.DESCR_ATIVO, DC1629.IDENT_ATIVO as TAG
+                DM1744.COD_USUARIO, DS0300.NOME_USUARIO as SOLICITANTE, DM1744.COD_SOLICITACAO, DM1744.TITULO_SOLICITACAO,
+                DM1744.DESCR_SOLICITACAO, DC1629.DESCR_ATIVO, DC1629.IDENT_ATIVO as TAG,
+                NULLIF(TRIM(DM1744.ID_CARTAO_TRELLO), '') AS TRELLO_CARD_ID,
+                TRELLO.ID_ROTULO AS TRELLO_LABEL_ID,
+                COALESCE(AUTH.req_count, 0) AS AUTH_REQ_COUNT,
+                COALESCE(AUTH.appr_count, 0) AS AUTH_APPR_COUNT
             FROM BANCO01.DM1744 
             LEFT JOIN public.DS0300 ON (DS0300.COD_USUARIO = DM1744.COD_USUARIO)
             LEFT JOIN BANCO01.DC1629 ON (DC1629.COD_ATIVO = DM1744.COD_ATIVO)
+            LEFT JOIN LATERAL (
+                SELECT ID_ROTULO
+                FROM BANCO01.DM2113
+                WHERE COD_SOLICITACAO = DM1744.COD_SOLICITACAO
+                  AND ID_ROTULO IS NOT NULL
+                ORDER BY SEQ DESC
+                LIMIT 1
+            ) TRELLO ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT
+                    SUM(CASE WHEN (
+                        (UPPER(X.{text_col}) LIKE '%%SOLICIT%%' AND UPPER(X.{text_col}) LIKE '%%AUTORIZA%%' AND UPPER(X.{text_col}) LIKE '%%FOI ENVIAD%%')
+                        OR UPPER(X.{text_col}) LIKE '%%SOLICITOU A AUTORIZA%%'
+                    ) THEN 1 ELSE 0 END) AS req_count,
+                    SUM(CASE WHEN (
+                        (UPPER(X.{text_col}) LIKE '%%AUTORIZA%%' AND UPPER(X.{text_col}) LIKE '%%APROVAD%%')
+                    ) THEN 1 ELSE 0 END) AS appr_count
+                FROM BANCO01.DM1745 X
+                WHERE X.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
+            ) AUTH ON TRUE
             WHERE DM1744.COD_SOLICITACAO = %s
         """, (cod_solicitacao,))
         row = cur.fetchone()
@@ -196,6 +221,37 @@ class ERPRepository:
         conn.close()
         return name
 
+    def buscar_trello_sem_rotulo_base(self, limit=30):
+        conn = get_erp_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT
+                DM1744.COD_SOLICITACAO,
+                DM1744.TITULO_SOLICITACAO,
+                DS0300.NOME_USUARIO AS SOLICITANTE,
+                DM1744.DATA_CAD,
+                DM1744.HORA_CAD,
+                NULLIF(TRIM(DM1744.ID_CARTAO_TRELLO), '') AS TRELLO_CARD_ID
+            FROM BANCO01.DM1744
+            LEFT JOIN public.DS0300 ON (DS0300.COD_USUARIO = DM1744.COD_USUARIO)
+            WHERE DM1744.COD_ASSUNTO IN (SELECT COD_ASSUNTO FROM BANCO01.DC1966 WHERE COD_DEPAR = 16)
+              AND NULLIF(TRIM(DM1744.ID_CARTAO_TRELLO), '') IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM BANCO01.DM2113
+                  WHERE COD_SOLICITACAO = DM1744.COD_SOLICITACAO
+                    AND ID_ROTULO IS NOT NULL
+              )
+            ORDER BY DM1744.COD_SOLICITACAO DESC
+            LIMIT %s
+        """, (int(limit) if limit else 30,))
+        rows = cur.fetchall()
+        columns = [col[0].lower() for col in cur.description]
+        results = [dict(zip(columns, row)) for row in rows]
+        cur.close()
+        conn.close()
+        return results
+
     def buscar_estatisticas_base(self):
         conn = get_erp_connection()
         cur = conn.cursor()
@@ -208,8 +264,7 @@ class ERPRepository:
                     WHEN DM1744.COD_STATUS_DOC IN ('IM', 'AB') THEN 'Aberta'
                     ELSE DM1744.COD_STATUS_DOC
                 END as categoria,
-                COUNT(*),
-                STRING_AGG(DM1744.TITULO_SOLICITACAO, '|||') as titulos
+                COUNT(*) as quantidade
             FROM BANCO01.DM1744 
             WHERE DM1744.COD_ASSUNTO IN (SELECT COD_ASSUNTO FROM BANCO01.DC1966 WHERE COD_DEPAR = 16)
             GROUP BY categoria
@@ -218,6 +273,135 @@ class ERPRepository:
         cur.close()
         conn.close()
         return rows
+
+    def buscar_titulos_por_status(self, status_codes):
+        conn = get_erp_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT DM1744.TITULO_SOLICITACAO
+            FROM BANCO01.DM1744
+            WHERE DM1744.COD_ASSUNTO IN (SELECT COD_ASSUNTO FROM BANCO01.DC1966 WHERE COD_DEPAR = 16)
+              AND DM1744.COD_STATUS_DOC = ANY(%s)
+        """, (list(status_codes or []),))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        return [r[0] for r in rows if r and r[0]]
+
+    def buscar_historico_periodo(self, start_erp, end_erp):
+        conn = get_erp_connection()
+        cur = conn.cursor()
+        text_col = self._get_text_col(cur)
+        dashboard_user_cod = int(os.getenv("DASHBOARD_USER_COD", "1538"))
+
+        cur.execute(f"""
+            WITH chamados_escopo AS (
+                SELECT DM1744.COD_SOLICITACAO
+                FROM BANCO01.DM1744
+                WHERE DM1744.NUM_BD IN (
+                    SELECT B.NUM_BD
+                    FROM BANCO01.DC1964 A
+                    INNER JOIN BANCO01.DC1965 B ON (B.COD_DEPAR = A.COD_DEPAR)
+                    WHERE A.COD_USUARIO = %s
+                )
+                AND DM1744.COD_ASSUNTO IN (
+                    SELECT B.COD_ASSUNTO
+                    FROM BANCO01.DC1964 A
+                    INNER JOIN BANCO01.DC1966 B ON (B.COD_DEPAR = A.COD_DEPAR)
+                    WHERE A.COD_USUARIO = %s
+                )
+            ),
+            eventos AS (
+                SELECT
+                    DM1744.DATA_CAD AS dia,
+                    'abertos' AS tipo,
+                    COUNT(*)::int AS qtd
+                FROM BANCO01.DM1744
+                INNER JOIN chamados_escopo C ON (C.COD_SOLICITACAO = DM1744.COD_SOLICITACAO)
+                WHERE DM1744.DATA_CAD BETWEEN %s AND %s
+                GROUP BY DM1744.DATA_CAD
+
+                UNION ALL
+                SELECT
+                    DM1744.DATA_INIC_ATEND AS dia,
+                    'atendidos' AS tipo,
+                    COUNT(*)::int AS qtd
+                FROM BANCO01.DM1744
+                INNER JOIN chamados_escopo C ON (C.COD_SOLICITACAO = DM1744.COD_SOLICITACAO)
+                WHERE DM1744.DATA_INIC_ATEND BETWEEN %s AND %s
+                GROUP BY DM1744.DATA_INIC_ATEND
+
+                UNION ALL
+                SELECT
+                    H.DATA_GRAV AS dia,
+                    'aprovados' AS tipo,
+                    COUNT(DISTINCT H.COD_SOLICITACAO)::int AS qtd
+                FROM BANCO01.DM1745 H
+                INNER JOIN chamados_escopo C ON (C.COD_SOLICITACAO = H.COD_SOLICITACAO)
+                WHERE H.DATA_GRAV BETWEEN %s AND %s
+                  AND UPPER(H.{text_col}) LIKE '%%AUTORIZA%%'
+                  AND UPPER(H.{text_col}) LIKE '%%APROVAD%%'
+                GROUP BY H.DATA_GRAV
+
+                UNION ALL
+                SELECT
+                    H.DATA_GRAV AS dia,
+                    'finalizados' AS tipo,
+                    COUNT(DISTINCT H.COD_SOLICITACAO)::int AS qtd
+                FROM BANCO01.DM1745 H
+                INNER JOIN chamados_escopo C ON (C.COD_SOLICITACAO = H.COD_SOLICITACAO)
+                WHERE H.DATA_GRAV BETWEEN %s AND %s
+                  AND UPPER(H.{text_col}) LIKE '%%SOLICIT%%'
+                  AND UPPER(H.{text_col}) LIKE '%%FINALIZAD%%'
+                  AND UPPER(H.{text_col}) NOT LIKE '%%ENCERRAD%%'
+                GROUP BY H.DATA_GRAV
+
+                UNION ALL
+                SELECT
+                    DM1744.DATA_BAIXA AS dia,
+                    'encerrados' AS tipo,
+                    COUNT(*)::int AS qtd
+                FROM BANCO01.DM1744
+                INNER JOIN chamados_escopo C ON (C.COD_SOLICITACAO = DM1744.COD_SOLICITACAO)
+                WHERE DM1744.DATA_BAIXA BETWEEN %s AND %s
+                  AND DM1744.COD_STATUS_DOC = 'BA'
+                GROUP BY DM1744.DATA_BAIXA
+            )
+            SELECT
+                dia,
+                COALESCE(SUM(CASE WHEN tipo = 'abertos' THEN qtd ELSE 0 END), 0)::int AS abertos,
+                COALESCE(SUM(CASE WHEN tipo = 'atendidos' THEN qtd ELSE 0 END), 0)::int AS atendidos,
+                COALESCE(SUM(CASE WHEN tipo = 'aprovados' THEN qtd ELSE 0 END), 0)::int AS aprovados,
+                COALESCE(SUM(CASE WHEN tipo = 'finalizados' THEN qtd ELSE 0 END), 0)::int AS finalizados,
+                COALESCE(SUM(CASE WHEN tipo = 'encerrados' THEN qtd ELSE 0 END), 0)::int AS encerrados
+            FROM eventos
+            GROUP BY dia
+            ORDER BY dia
+        """, (
+            dashboard_user_cod,
+            dashboard_user_cod,
+            start_erp, end_erp,
+            start_erp, end_erp,
+            start_erp, end_erp,
+            start_erp, end_erp,
+            start_erp, end_erp,
+        ))
+
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        out = {}
+        for dia, abertos, atendidos, aprovados, finalizados, encerrados in rows:
+            if dia is None:
+                continue
+            out[int(dia)] = {
+                "abertos": int(abertos or 0),
+                "atendidos": int(atendidos or 0),
+                "aprovados": int(aprovados or 0),
+                "finalizados": int(finalizados or 0),
+                "encerrados": int(encerrados or 0),
+            }
+        return out
 
     def buscar_historico_dia(self, d_erp):
         conn = get_erp_connection()
@@ -384,14 +568,27 @@ class ERPRepository:
             LIMIT %s
         """, (limit,))
         tickets = cur.fetchall()
-        
+
+        ticket_ids = [int(t[0]) for t in tickets if t and t[0] is not None]
+        comms_by_ticket = {tid: [] for tid in ticket_ids}
+        if ticket_ids:
+            cur.execute(f"""
+                SELECT COD_SOLICITACAO, DATA_GRAV, HORA_GRAV, UPPER({text_col}) AS TXT
+                FROM BANCO01.DM1745
+                WHERE COD_SOLICITACAO = ANY(%s)
+                ORDER BY COD_SOLICITACAO ASC, DATA_GRAV ASC, HORA_GRAV ASC
+            """, (ticket_ids,))
+            for tid, d_grav, h_grav, txt in cur.fetchall():
+                try:
+                    comms_by_ticket[int(tid)].append((d_grav, h_grav, txt or ""))
+                except Exception:
+                    continue
+
         results = []
         for t in tickets:
-            tid = t[0]
-            cur.execute(f"SELECT DATA_GRAV, HORA_GRAV, UPPER({text_col}) FROM BANCO01.DM1745 WHERE COD_SOLICITACAO = %s ORDER BY DATA_GRAV ASC, HORA_GRAV ASC", (tid,))
-            comms = cur.fetchall()
-            results.append({"ticket": t, "comentarios": comms})
-            
+            tid = int(t[0])
+            results.append({"ticket": t, "comentarios": comms_by_ticket.get(tid, [])})
+
         cur.close()
         conn.close()
         return results
@@ -899,7 +1096,6 @@ class ERPRepository:
         etapa_filter = (filtros.get('etapa') or '').strip().lower()
         ativo_filter = filtros.get('ativo')
         aprovador_filter = filtros.get('aprovador')
-        encerrados_all = str(filtros.get('encerrados_all') or '').strip().lower() in {'1', 'true', 'yes', 'on', 'todos', 'all'}
         encerrados_limit = 1000
 
         conn = get_erp_connection()
@@ -1119,62 +1315,81 @@ class ERPRepository:
             )"""
             params.extend([like, like, like])
         if executor_filter:
-            clean_exec = executor_filter.upper().split(" - ")[0].split(" -")[0].strip()
-            if etapa_filter in {"", "qualquer", "all"}:
-                query += f""" AND (
-                    EXISTS (
+            raw_exec = str(executor_filter or "")
+            exec_items = [e.strip() for e in raw_exec.split(",") if e.strip()]
+            clean_execs = []
+            for e in exec_items:
+                ce = e.upper().split(" - ")[0].split(" -")[0].strip()
+                if ce and ce not in clean_execs:
+                    clean_execs.append(ce)
+            if clean_execs:
+                if etapa_filter in {"", "qualquer", "all"}:
+                    text_patterns = []
+                    for ce in clean_execs:
+                        text_patterns.extend([
+                            f"%APROVAD% POR {ce}%",
+                            f"%FINALIZAD% POR {ce}%",
+                            f"%ENCERRAD% POR {ce}%",
+                        ])
+                    text_where = " OR ".join([f"UPPER(K.{text_col}) LIKE %s"] * len(text_patterns))
+
+                    user_patterns = [f"%{ce}%" for ce in clean_execs]
+                    user_where = " OR ".join(["UPPER(U.NOME_USUARIO) LIKE %s"] * len(user_patterns))
+
+                    query += f""" AND (
+                        EXISTS (
+                            SELECT 1 FROM BANCO01.DM1745 K
+                            WHERE K.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
+                              AND ({text_where})
+                        )
+                        OR EXISTS (
+                            SELECT 1 FROM BANCO01.DM1745 K
+                            JOIN public.DS0300 U ON (U.COD_USUARIO = K.COD_USUARIO)
+                            WHERE K.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
+                              AND ({user_where})
+                        )
+                    )"""
+                    params.extend(text_patterns)
+                    params.extend(user_patterns)
+                elif etapa_filter in {"aprovado", "aprovacao"}:
+                    patterns = [f"%APROVAD% POR {ce}%" for ce in clean_execs]
+                    where = " OR ".join([f"UPPER(K.{text_col}) LIKE %s"] * len(patterns))
+                    query += f""" AND EXISTS (
                         SELECT 1 FROM BANCO01.DM1745 K
                         WHERE K.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
-                          AND (
-                            UPPER(K.{text_col}) LIKE %s
-                            OR UPPER(K.{text_col}) LIKE %s
-                            OR UPPER(K.{text_col}) LIKE %s
-                          )
-                    )
-                    OR EXISTS (
+                          AND ({where})
+                    )"""
+                    params.extend(patterns)
+                elif etapa_filter in {"finalizado", "finalizacao"}:
+                    patterns = [f"%FINALIZAD% POR {ce}%" for ce in clean_execs]
+                    where = " OR ".join([f"UPPER(K.{text_col}) LIKE %s"] * len(patterns))
+                    query += f""" AND EXISTS (
+                        SELECT 1 FROM BANCO01.DM1745 K
+                        WHERE K.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
+                          AND ({where})
+                    )"""
+                    params.extend(patterns)
+                elif etapa_filter in {"encerrado", "encerramento"}:
+                    patterns = [f"%ENCERRAD% POR {ce}%" for ce in clean_execs]
+                    where = " OR ".join([f"UPPER(K.{text_col}) LIKE %s"] * len(patterns))
+                    query += f""" AND EXISTS (
+                        SELECT 1 FROM BANCO01.DM1745 K
+                        WHERE K.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
+                          AND ({where})
+                    )"""
+                    params.extend(patterns)
+                elif etapa_filter in {"comentou", "comentario", "comentários", "comentarios"}:
+                    patterns = [f"%{ce}%" for ce in clean_execs]
+                    where = " OR ".join(["UPPER(U.NOME_USUARIO) LIKE %s"] * len(patterns))
+                    query += f""" AND EXISTS (
                         SELECT 1 FROM BANCO01.DM1745 K
                         JOIN public.DS0300 U ON (U.COD_USUARIO = K.COD_USUARIO)
                         WHERE K.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
-                          AND UPPER(U.NOME_USUARIO) LIKE %s
-                    )
-                )"""
-                params.extend([
-                    f"%APROVAD% POR {clean_exec}%",
-                    f"%FINALIZAD% POR {clean_exec}%",
-                    f"%ENCERRAD% POR {clean_exec}%",
-                    f"%{clean_exec}%",
-                ])
-            elif etapa_filter in {"aprovado", "aprovacao"}:
-                query += f""" AND EXISTS (
-                    SELECT 1 FROM BANCO01.DM1745 K
-                    WHERE K.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
-                      AND UPPER(K.{text_col}) LIKE %s
-                )"""
-                params.append(f"%APROVAD% POR {clean_exec}%")
-            elif etapa_filter in {"finalizado", "finalizacao"}:
-                query += f""" AND EXISTS (
-                    SELECT 1 FROM BANCO01.DM1745 K
-                    WHERE K.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
-                      AND UPPER(K.{text_col}) LIKE %s
-                )"""
-                params.append(f"%FINALIZAD% POR {clean_exec}%")
-            elif etapa_filter in {"encerrado", "encerramento"}:
-                query += f""" AND EXISTS (
-                    SELECT 1 FROM BANCO01.DM1745 K
-                    WHERE K.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
-                      AND UPPER(K.{text_col}) LIKE %s
-                )"""
-                params.append(f"%ENCERRAD% POR {clean_exec}%")
-            elif etapa_filter in {"comentou", "comentario", "comentários", "comentarios"}:
-                query += f""" AND EXISTS (
-                    SELECT 1 FROM BANCO01.DM1745 K
-                    JOIN public.DS0300 U ON (U.COD_USUARIO = K.COD_USUARIO)
-                    WHERE K.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
-                      AND UPPER(U.NOME_USUARIO) LIKE %s
-                )"""
-                params.append(f"%{clean_exec}%")
+                          AND ({where})
+                    )"""
+                    params.extend(patterns)
 
-        if not encerrados_all and 'BA' in status_filter_set:
+        if 'BA' in status_filter_set:
             query = f"""
                 WITH base_kanban AS (
                     {query}

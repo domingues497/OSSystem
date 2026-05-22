@@ -1,4 +1,5 @@
 from flask import Blueprint, jsonify, request
+from time import perf_counter
 from repositories.erp_repository import ERPRepository
 from repositories.local_note_repository import LocalNoteRepository
 from services.chamado_service import ChamadoService
@@ -61,7 +62,12 @@ def get_estatisticas():
     start = request.args.get('start_date')
     end = request.args.get('end_date')
     kpi_date = request.args.get('kpi_date')
-    return jsonify(dashboard_service.obter_estatisticas(start, end, kpi_date))
+    debug_timing = (request.args.get('debug_timing') or "").strip().lower() in {"1", "true", "yes", "on"}
+    t0 = perf_counter()
+    data = dashboard_service.obter_estatisticas(start, end, kpi_date, debug_timing=debug_timing)
+    resp = jsonify(data)
+    resp.headers["X-Server-Time-ms"] = f"{(perf_counter() - t0) * 1000:.2f}"
+    return resp
 
 @erp_bp.route('/kanban')
 def get_kanban():
@@ -80,13 +86,26 @@ def get_kanban():
         'etapa': request.args.get('etapa'),
         'ativo': request.args.get('ativo'),
         'aprovador': request.args.get('aprovador'),
-        'encerrados_all': request.args.get('encerrados_all')
+        'atendente': request.args.get('atendente'),
     }
     return jsonify(dashboard_service.obter_kanban(filtros))
 
 @erp_bp.route('/chamados_pendentes')
 def get_chamados_pendentes():
-    return jsonify(chamado_service.buscar_pendentes())
+    t0 = perf_counter()
+    data = chamado_service.buscar_pendentes()
+    resp = jsonify(data)
+    resp.headers["X-Server-Time-ms"] = f"{(perf_counter() - t0) * 1000:.2f}"
+    return resp
+
+@erp_bp.route('/trello_sem_rotulo')
+def get_trello_sem_rotulo():
+    raw = (request.args.get('limit') or '').strip()
+    try:
+        limit = int(raw) if raw else 30
+    except Exception:
+        limit = 30
+    return jsonify(dashboard_service.obter_trello_sem_rotulo(limit))
 
 @erp_bp.route('/produtividade')
 def get_produtividade_data():

@@ -1,6 +1,28 @@
 from utils.datetime_utils import format_erp_date, format_erp_time, erp_to_datetime, format_duration
 from utils.classifier import classify_ticket
 
+TRELLO_ROTULO_SETORES = {
+    1: "Café",
+    2: "Comercial",
+    3: "Compras",
+    4: "Contabilidade",
+    5: "dat",
+    6: "Financeiro",
+    7: "fiscal",
+    8: "loja",
+    9: "manutenção",
+    10: "RH",
+    11: "ração",
+    12: "t.i",
+    14: "ubs",
+    16: "Auditoria",
+    17: "Balança",
+    18: "Custos",
+    22: "Pecuária",
+    26: "Posto",
+    36: "Cadastro",
+}
+
 class ChamadoService:
     def __init__(self, erp_repo, local_repo):
         self.erp_repo = erp_repo
@@ -54,6 +76,34 @@ class ChamadoService:
         erp_data = self.erp_repo.buscar_chamado_por_id(cod_solicitacao)
         if not erp_data:
             return None
+
+        trello_card_id = erp_data.get('trello_card_id')
+        trello_label_id = erp_data.get('trello_label_id')
+        try:
+            trello_label_id = int(trello_label_id) if trello_label_id is not None and str(trello_label_id).strip() != '' else None
+        except Exception:
+            trello_label_id = None
+        trello_setor = TRELLO_ROTULO_SETORES.get(trello_label_id) if trello_label_id is not None else None
+        erp_data['trello'] = {
+            "integrado": bool(trello_card_id),
+            "card_id": trello_card_id or "",
+            "rotulo_id": trello_label_id,
+            "setor": trello_setor or "",
+            "sem_rotulo": bool(trello_card_id) and trello_label_id is None,
+        }
+
+        try:
+            auth_req = int(erp_data.get('auth_req_count') or 0)
+        except Exception:
+            auth_req = 0
+        try:
+            auth_appr = int(erp_data.get('auth_appr_count') or 0)
+        except Exception:
+            auth_appr = 0
+        erp_data['aprovacao_gerencia'] = {
+            "solicitado": auth_req,
+            "aprovado": auth_appr,
+        }
 
         # 3. Buscar comentários
         comentarios = self.erp_repo.buscar_comentarios_chamado(cod_solicitacao)

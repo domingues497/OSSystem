@@ -4,3 +4,6 @@ djangorestframework-simplejwt
 psycopg2-binary
 python-dotenv
 django-cors-headers
+django-auth-ldap
+ldap3
+cryptography

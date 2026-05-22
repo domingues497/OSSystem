@@ -1,14 +1,23 @@
 from utils.classifier import classify_ticket
 from datetime import datetime, timedelta
 from utils.datetime_utils import erp_to_datetime, format_duration_short
+from time import perf_counter
+import os
 
 class DashboardService:
     def __init__(self, erp_repo, local_repo):
         self.erp_repo = erp_repo
         self.local_repo = local_repo
+        self._estat_cache = {}
+        try:
+            self._estat_cache_ttl = int(os.getenv("DASHBOARD_CACHE_SECONDS", "15"))
+        except Exception:
+            self._estat_cache_ttl = 15
 
-    def obter_estatisticas(self, start_date_str=None, end_date_str=None, kpi_date_str=None):
+    def obter_estatisticas(self, start_date_str=None, end_date_str=None, kpi_date_str=None, debug_timing=False):
         now = datetime.now()
+        timing = {} if debug_timing else None
+        t_total0 = perf_counter()
         
         if start_date_str and end_date_str:
             start_dt = datetime.strptime(start_date_str, '%Y-%m-%d')
@@ -25,6 +34,12 @@ class DashboardService:
         else:
             kpi_dt = now
         today_erp = int(kpi_dt.strftime('%Y%m%d'))
+
+        cache_key = (start_dt.strftime('%Y-%m-%d'), end_dt.strftime('%Y-%m-%d'), kpi_dt.strftime('%Y-%m-%d'))
+        if not debug_timing and self._estat_cache_ttl > 0:
+            cached = self._estat_cache.get(cache_key)
+            if cached and (perf_counter() - cached["ts"]) < self._estat_cache_ttl:
+                return cached["data"]
         
         # Gerar lista de dias no período
         period_days = []
@@ -34,18 +49,22 @@ class DashboardService:
             curr += timedelta(days=1)
 
         # 1. Buscar estatísticas base
+        t0 = perf_counter()
         rows = self.erp_repo.buscar_estatisticas_base()
+        if timing is not None:
+            timing["estatisticas_base_ms"] = round((perf_counter() - t0) * 1000, 2)
         
         # 2. Calcular distribuição de tipos (Heurística)
         categorias_alvo = ['Aberta', 'Aguardando', 'Andamento', 'Avaliação']
         distribuicao_tipos = {"Incidente": 0, "Requisição": 0, "BI": 0}
-        
-        for row in rows:
-            if row[0] in categorias_alvo:
-                titulos = row[2].split('|||') if row[2] else []
-                for t in titulos:
-                    tipo = classify_ticket(t)
-                    distribuicao_tipos[tipo] += 1
+
+        t0 = perf_counter()
+        titulos = self.erp_repo.buscar_titulos_por_status(['IM', 'AB', 'AA', 'EA', 'AN', 'AV'])
+        for t in titulos:
+            tipo = classify_ticket(t)
+            distribuicao_tipos[tipo] += 1
+        if timing is not None:
+            timing["distribuicao_tipos_ms"] = round((perf_counter() - t0) * 1000, 2)
 
         # 3. Processar percentuais e categorias
         total_para_percentual = sum(row[1] for row in rows if row[0] in categorias_alvo)
@@ -64,9 +83,16 @@ class DashboardService:
             })
 
         # 4. Histórico do período
+        t0 = perf_counter()
+        start_erp = int(start_dt.strftime('%Y%m%d'))
+        end_erp = int(end_dt.strftime('%Y%m%d'))
+        historico_map = self.erp_repo.buscar_historico_periodo(start_erp, end_erp)
+        if timing is not None:
+            timing["historico_periodo_ms"] = round((perf_counter() - t0) * 1000, 2)
+
         historico = []
         for d_erp in period_days:
-            h = self.erp_repo.buscar_historico_dia(d_erp)
+            h = historico_map.get(d_erp) or {"abertos": 0, "atendidos": 0, "aprovados": 0, "finalizados": 0, "encerrados": 0}
             d_str = str(d_erp)
             dow_map = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
             try:
@@ -83,18 +109,32 @@ class DashboardService:
                 "encerrados": h['encerrados']
             })
 
+        t0 = perf_counter()
         kpis = self.erp_repo.buscar_kpis_status_hoje(today_erp)
+        if timing is not None:
+            timing["kpis_ms"] = round((perf_counter() - t0) * 1000, 2)
 
         # 6. Tempos Médios
+        t0 = perf_counter()
         tempos_medios = self._calcular_tempos_medios()
+        if timing is not None:
+            timing["tempos_medios_ms"] = round((perf_counter() - t0) * 1000, 2)
             
-        return {
+        payload = {
             "kpis": kpis,
             "historico": historico,
             "detalhes": stats,
             "distribuicao_tipos": distribuicao_tipos,
             "tempos_medios": tempos_medios
         }
+        if timing is not None:
+            timing["total_ms"] = round((perf_counter() - t_total0) * 1000, 2)
+            payload["__timing_ms"] = timing
+
+        if not debug_timing and self._estat_cache_ttl > 0:
+            self._estat_cache[cache_key] = {"ts": perf_counter(), "data": payload}
+
+        return payload
 
     def _calcular_tempos_medios(self):
         recent_data = self.erp_repo.buscar_recentes_para_tempo_medio(200)
@@ -154,6 +194,29 @@ class DashboardService:
             "Finalização → Encerramento": get_avg("finalizacao_encerramento")
         }
 
+    def obter_trello_sem_rotulo(self, limit=30):
+        results = self.erp_repo.buscar_trello_sem_rotulo_base(limit)
+        ticket_ids = [int(r['cod_solicitacao']) for r in results]
+        tickets_with_notes = self.local_repo.get_ticket_ids_with_notes(ticket_ids) if ticket_ids else set()
+
+        for d in results:
+            h_val = float(d['hora_cad']) if d.get('hora_cad') else 0
+            hh = int(h_val)
+            mm = int((h_val - hh) * 100)
+            ss = int(((h_val - hh) * 100 - mm) * 100)
+            d['hora_cad_fmt'] = f"{hh:02d}:{mm:02d}:{ss:02d}"
+
+            dt_str = str(d.get('data_cad') or '')
+            if len(dt_str) == 8:
+                d['data_cad_iso'] = f"{dt_str[0:4]}-{dt_str[4:6]}-{dt_str[6:8]}"
+            else:
+                d['data_cad_iso'] = ''
+
+            d['has_local_note'] = int(d['cod_solicitacao']) in tickets_with_notes
+            d['tipo'] = classify_ticket(d.get('titulo_solicitacao'))
+
+        return results
+
     def obter_kanban(self, filtros):
         f_id = filtros.get('id')
         f_solicitante = filtros.get('solicitante')
@@ -169,6 +232,7 @@ class DashboardService:
         f_etapa = filtros.get('etapa')
         f_ativo = filtros.get('ativo')
         f_aprovador = filtros.get('aprovador')
+        f_atendente = filtros.get('atendente')
 
         # Construir query base (simplificado no repositório agora)
         # O repositório precisa de buscar_coluna_kanban(query, params)
@@ -220,7 +284,7 @@ class DashboardService:
             atendente = assignees_by_ticket.get(tid, "")
             if f_tipo and item_tipo != f_tipo:
                 continue
-            if f_aprovador and (atendente or "").strip().upper() != str(f_aprovador).strip().upper():
+            if f_atendente and (atendente or "").strip().upper() != str(f_atendente).strip().upper():
                 continue
 
             col_name = None

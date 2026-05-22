@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login</title>
+</head>
+<body style="font-family: Arial, sans-serif; background:#f6f7fb; margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;">
+  <div style="width: 420px; background:#fff; border:1px solid #e7e7ef; border-radius:12px; padding:22px; box-shadow: 0 12px 28px rgba(0,0,0,0.08);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
+      <h1 style="margin:0; font-size: 18px; color:#B1C800;">SGC</h1>
+    </div>
+
+    {% if form.errors %}
+      <div style="background:#fff5f5; border:1px solid #ffd1d1; color:#b00020; padding:10px; border-radius:8px; font-size: 13px; margin: 10px 0;">
+        Usuário ou senha inválidos.
+      </div>
+    {% endif %}
+
+    <form method="post" style="display:flex; flex-direction:column; gap:10px;">
+      {% csrf_token %}
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        <label style="font-size: 12px; color:#555;">Usuário</label>
+        {{ form.username }}
+      </div>
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        <label style="font-size: 12px; color:#555;">Senha</label>
+        {{ form.password }}
+      </div>
+      <button type="submit" style="margin-top: 6px; padding:10px 12px; border-radius:8px; border:none; background:#B1C800; color:#fff; font-weight:600; cursor:pointer;">
+        Entrar
+      </button>
+    </form>
+  </div>
+
+  <script>
+    (function(){
+      const inputs = document.querySelectorAll('input');
+      inputs.forEach(i => {
+        i.style.padding = '10px 12px';
+        i.style.borderRadius = '8px';
+        i.style.border = '1px solid #ddd';
+        i.style.fontSize = '14px';
+        i.style.width = '100%';
+        i.style.boxSizing = 'border-box';
+      });
+    })();
+  </script>
+</body>
+</html>
+

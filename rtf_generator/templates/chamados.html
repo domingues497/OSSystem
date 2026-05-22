@@ -30,6 +30,17 @@
                         <option value="600">10m</option>
                     </select>
                 </div>
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <input type="date" id="filter-start-date" style="width: 11ch; border: 1px solid #ddd; border-radius: 4px; padding: 3px 6px; font-size: 0.8rem; color: #444; height: 40px; box-sizing: border-box;">
+                    <span style="font-size: 0.8rem; color: #999;">-</span>
+                    <input type="date" id="filter-end-date" style="width: 11ch; border: 1px solid #ddd; border-radius: 4px; padding: 3px 6px; font-size: 0.8rem; color: #444; height: 40px; box-sizing: border-box;">
+                    <button type="button" onclick="carregarKanban();" style="padding: 4px 12px; font-size: 0.8rem; background: #1a73e8; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; height: 40px;">
+                        OK
+                    </button>
+                </div>
+                <button id="toggle-tv-mode" type="button" class="btn" onclick="toggleTvMode()" style="padding: 4px 10px; font-size: 0.8rem; background: #f1f3f4; color: #444; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; font-weight: 600;">
+                    <i class="fas fa-tv"></i> TV
+                </button>
                 <button type="button" class="btn" onclick="carregarKanban()" style="padding: 4px 12px; font-size: 0.8rem; background: #5f6368; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">
                     <i class="fas fa-sync-alt"></i> Kanban
                 </button>
@@ -45,23 +56,32 @@
                 <label class="filter-label">Solicitante</label>
                 <input type="text" id="filter-solicitante" class="filter-input filter-input-solicitante" placeholder="Nome...">
             </div>
+            <div class="filter-group">
+                <label class="filter-label">Últ. Iteração:</label>
+                <select id="filter-executor-visible" class="filter-input filter-select-tecnico" onchange="carregarKanban();">
+                    <option value="">Todos</option>
+                </select>
+            </div>
             <div class="filter-group filter-group-tecnico">
-                <label class="filter-label">Tec. Atrib.:</label>
+                <label class="filter-label">Últ. Atend.:</label>
                 <select id="filter-aprovador" class="filter-input filter-select-tecnico" onchange="carregarKanban();">
                     <option value="">Todos</option>
                 </select>
             </div>
-            <div class="filter-group filter-group-date">
-                <label class="filter-label">Início:</label>
-                <input type="date" id="filter-start-date" class="filter-input filter-input-date">
-            </div>
-            <div class="filter-group filter-group-date">
-                <label class="filter-label">Fim:</label>
-                <input type="date" id="filter-end-date" class="filter-input filter-input-date">
-            </div>
             <div class="filter-group filter-group-conteudo">
                 <label class="filter-label">Conteúdo:</label>
                 <input type="text" id="filter-conteudo" class="filter-input filter-input-conteudo" placeholder="Texto...">
+            </div>
+
+            <div class="filter-group">
+                <label class="filter-label">Etapa:</label>
+                <select id="filter-etapa-visible" class="filter-input" onchange="carregarKanban();">
+                    <option value="">Qualquer</option>
+                    <option value="aprovado">Aprovado</option>
+                    <option value="finalizado">Finalizado</option>
+                    <option value="encerrado">Encerrado</option>
+                    <option value="comentou">Comentou</option>
+                </select>
             </div>
             <input type="hidden" id="filter-executor">
             <input type="hidden" id="filter-etapa">
@@ -208,9 +228,6 @@
                     <div class="kanban-header">
                         <span>ENCERRADOS</span>
                         <div style="display: flex; align-items: center; gap: 10px;">
-                            <button class="btn-sort" onclick="toggleEncerradosLimit()" title="Alternar entre últimos 3000 e todos">
-                                <span id="encerrados-limit-label" style="font-size: 0.68rem; font-weight: 700;">3000</span>
-                            </button>
                             <button class="btn-sort" onclick="toggleSort('encerrados')" title="Inverter Ordem">
                                 <i class="fas fa-sort" id="sort-icon-encerrados"></i>
                             </button>
@@ -242,9 +259,10 @@
         let filterDebounceTimer = null;
         let aprovadoresCache = [];
         let tecnicosFiltroCache = [];
-        let showAllEncerrados = localStorage.getItem('kanban-encerrados-all') === '1';
         let currentKanbanView = {};
         let currentModalContext = { columnId: null, ticketId: null, ticketsSnapshot: [] };
+        let tvModeEnabled = localStorage.getItem('tv-mode-enabled') === 'true';
+        let wakeLock = null;
         
         // Configurações do Kanban
         let kanbanSort = {
@@ -265,6 +283,50 @@
             const sec = parseInt(document.getElementById('refresh-interval').value);
             localStorage.setItem('chamados-refresh-interval', sec);
             if(sec > 0) refreshTimer = setInterval(carregarKanban, sec * 1000);
+        }
+
+        function updateTvModeButton() {
+            const btn = document.getElementById('toggle-tv-mode');
+            if (!btn) return;
+            btn.style.background = tvModeEnabled ? '#e8f0fe' : '#f1f3f4';
+            btn.style.borderColor = tvModeEnabled ? '#1a73e8' : '#ddd';
+            btn.style.color = tvModeEnabled ? '#1a73e8' : '#444';
+            btn.title = tvModeEnabled ? 'Modo TV (ativo)' : 'Modo TV';
+        }
+
+        async function requestWakeLock() {
+            if (!tvModeEnabled) return;
+            if (!('wakeLock' in navigator)) return;
+            try {
+                if (wakeLock) return;
+                wakeLock = await navigator.wakeLock.request('screen');
+                wakeLock.addEventListener('release', () => {
+                    wakeLock = null;
+                    if (tvModeEnabled) updateTvModeButton();
+                });
+                updateTvModeButton();
+            } catch (e) {
+                wakeLock = null;
+                updateTvModeButton();
+            }
+        }
+
+        function releaseWakeLock() {
+            try {
+                if (wakeLock) wakeLock.release();
+            } catch (e) { }
+            wakeLock = null;
+        }
+
+        async function toggleTvMode() {
+            tvModeEnabled = !tvModeEnabled;
+            localStorage.setItem('tv-mode-enabled', tvModeEnabled);
+            updateTvModeButton();
+            if (tvModeEnabled) {
+                await requestWakeLock();
+            } else {
+                releaseWakeLock();
+            }
         }
 
         function escapeHtml(value) {
@@ -288,6 +350,9 @@
                 setupAutoRefresh();
             }
 
+            updateTvModeButton();
+            if (tvModeEnabled) requestWakeLock();
+
             // Aplicar ícones de ordenação iniciais
             ['aberta', 'aguardando', 'andamento', 'avaliacao', 'encerrados'].forEach(col => {
                 const icon = document.getElementById(`sort-icon-${col}`);
@@ -301,22 +366,7 @@
             if (modeIcon) {
                 modeIcon.style.color = aguardandoOrderMode === 'cor' ? '#1a73e8' : '';
             }
-            updateEncerradosLimitButton();
             updateOnlyApprovedButton();
-        }
-
-        function updateEncerradosLimitButton() {
-            const label = document.getElementById('encerrados-limit-label');
-            if (!label) return;
-            label.textContent = showAllEncerrados ? 'Todos' : '3000';
-            label.style.color = showAllEncerrados ? '#1a73e8' : '';
-        }
-
-        function toggleEncerradosLimit() {
-            showAllEncerrados = !showAllEncerrados;
-            localStorage.setItem('kanban-encerrados-all', showAllEncerrados ? '1' : '0');
-            updateEncerradosLimitButton();
-            carregarKanban();
         }
         
         function updateOnlyApprovedButton() {
@@ -356,7 +406,7 @@
         }
         
         function setupLiveFilters() {
-            ['filter-id', 'filter-solicitante', 'filter-assunto-q', 'filter-conteudo'].forEach(id => {
+            ['filter-id', 'filter-solicitante', 'filter-assunto-q', 'filter-conteudo', 'filter-executor-visible'].forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
                 el.addEventListener('input', () => {
@@ -365,13 +415,141 @@
             });
         }
 
+        function _parseCsvList(value) {
+            return String(value || '')
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean);
+        }
+
+        function _setExecutorHiddenValue(list) {
+            const hidden = document.getElementById('filter-executor-visible');
+            if (!hidden) return;
+            hidden.value = (list || []).join(',');
+        }
+
+        function _getExecutorHiddenList() {
+            const hidden = document.getElementById('filter-executor-visible');
+            return _parseCsvList(hidden ? hidden.value : '');
+        }
+
+        function toggleExecutorMultiSelect() {
+            const panel = document.getElementById('executor-ms-panel');
+            if (!panel) return;
+            const current = window.getComputedStyle(panel).display;
+            panel.style.display = current === 'none' ? 'block' : 'none';
+        }
+
+        function closeExecutorMultiSelect() {
+            const panel = document.getElementById('executor-ms-panel');
+            if (!panel) return;
+            panel.style.display = 'none';
+        }
+
+        function renderExecutorMultiSelect() {
+            const container = document.getElementById('executor-ms-options');
+            const label = document.getElementById('executor-ms-label');
+            if (!container || !label) return;
+
+            const selected = new Set(_getExecutorHiddenList());
+            container.innerHTML = '';
+
+            const addOption = (name) => {
+                const safeId = 'exec_' + btoa(unescape(encodeURIComponent(name))).replace(/=+$/,'').replace(/[+/]/g, '_');
+                const checked = selected.has(name);
+                const row = document.createElement('label');
+                row.setAttribute('for', safeId);
+                    row.className = 'dropdown-option';
+                row.innerHTML = `
+                    <input id="${safeId}" type="checkbox" ${checked ? 'checked' : ''} style="transform: translateY(1px);">
+                    <span style="font-size: 0.85rem; color:#333;">${escapeHtml(name)}</span>
+                `;
+                const input = row.querySelector('input');
+                input.addEventListener('change', () => {
+                    const curr = new Set(_getExecutorHiddenList());
+                    if (input.checked) curr.add(name);
+                    else curr.delete(name);
+                    _setExecutorHiddenValue(Array.from(curr));
+                    updateExecutorMultiSelectLabel();
+                    scheduleFilterRefresh();
+                });
+                container.appendChild(row);
+            };
+
+            (Array.isArray(aprovadoresCache) ? aprovadoresCache : []).forEach(n => {
+                if (n && String(n).trim()) addOption(String(n).trim());
+            });
+            updateExecutorMultiSelectLabel();
+        }
+
+        function renderExecutorSelect() {
+            const select = document.getElementById('filter-executor-visible');
+            if (!select) return;
+            const currentValue = select.value;
+            select.innerHTML = '<option value="">Todos</option>';
+            (Array.isArray(aprovadoresCache) ? aprovadoresCache : []).forEach(nome => {
+                const n = String(nome || '').trim();
+                if (!n) return;
+                const opt = document.createElement('option');
+                opt.value = n;
+                opt.textContent = n;
+                select.appendChild(opt);
+            });
+            if (currentValue) {
+                select.value = currentValue;
+                if (select.value !== currentValue) {
+                    const opt = document.createElement('option');
+                    opt.value = currentValue;
+                    opt.textContent = currentValue;
+                    select.insertBefore(opt, select.children[1] || null);
+                    select.value = currentValue;
+                }
+            }
+        }
+
+        function updateExecutorMultiSelectLabel() {
+            const label = document.getElementById('executor-ms-label');
+            if (!label) return;
+            const list = _getExecutorHiddenList();
+            if (!list.length) {
+                label.textContent = 'Todos';
+                return;
+            }
+            if (list.length === 1) {
+                label.textContent = list[0];
+                return;
+            }
+            label.textContent = `${list.length} selecionados`;
+        }
+
+        function clearExecutors() {
+            _setExecutorHiddenValue([]);
+            renderExecutorMultiSelect();
+            scheduleFilterRefresh();
+        }
+
+        function selectAllExecutors() {
+            _setExecutorHiddenValue([]);
+            renderExecutorMultiSelect();
+            scheduleFilterRefresh();
+        }
+
+        document.addEventListener('click', (e) => {
+            const panel = document.getElementById('executor-ms-panel');
+            const btn = document.getElementById('executor-ms-btn');
+            if (!panel || !btn) return;
+            if (window.getComputedStyle(panel).display !== 'block') return;
+            const inside = panel.contains(e.target) || btn.contains(e.target);
+            if (!inside) closeExecutorMultiSelect();
+        });
+
         function openAdvancedFilters() {
             const overlay = document.getElementById('advanced-filter-overlay');
             const advExec = document.getElementById('adv-executor');
             const advEtapa = document.getElementById('adv-etapa');
             const advSol = document.getElementById('adv-solicitante');
-            const hExec = document.getElementById('filter-executor');
-            const hEtapa = document.getElementById('filter-etapa');
+            const hExec = document.getElementById('filter-executor-visible');
+            const hEtapa = document.getElementById('filter-etapa-visible');
             const sol = document.getElementById('filter-solicitante');
             if (advExec && hExec) advExec.value = hExec.value || '';
             if (advEtapa && hEtapa) advEtapa.value = hEtapa.value || '';
@@ -388,8 +566,8 @@
             const advExec = document.getElementById('adv-executor');
             const advEtapa = document.getElementById('adv-etapa');
             const advSol = document.getElementById('adv-solicitante');
-            const hExec = document.getElementById('filter-executor');
-            const hEtapa = document.getElementById('filter-etapa');
+            const hExec = document.getElementById('filter-executor-visible');
+            const hEtapa = document.getElementById('filter-etapa-visible');
             const sol = document.getElementById('filter-solicitante');
             if (hExec) hExec.value = (advExec && advExec.value) ? advExec.value : '';
             if (hEtapa) hEtapa.value = (advEtapa && advEtapa.value) ? advEtapa.value : '';
@@ -412,8 +590,8 @@
             const advExec = document.getElementById('adv-executor');
             const advEtapa = document.getElementById('adv-etapa');
             const advSol = document.getElementById('adv-solicitante');
-            const hExec = document.getElementById('filter-executor');
-            const hEtapa = document.getElementById('filter-etapa');
+            const hExec = document.getElementById('filter-executor-visible');
+            const hEtapa = document.getElementById('filter-etapa-visible');
             if (advExec) advExec.value = '';
             if (advEtapa) advEtapa.value = '';
             if (advSol) advSol.value = '';
@@ -458,6 +636,8 @@
                 'filter-conteudo',
                 'filter-executor',
                 'filter-etapa',
+                'filter-executor-visible',
+                'filter-etapa-visible',
                 'filter-tipo',
                 'filter-assunto',
                 'filter-ativo'
@@ -475,7 +655,7 @@
             updateOnlyApprovedButton();
             try {
                 const url = new URL(window.location.href);
-                ['kpi','status','tipo','assunto','ativo','aprovador','start_date','end_date','executor','etapa','q','assunto_q'].forEach(k => url.searchParams.delete(k));
+                ['kpi','status','tipo','assunto','ativo','atendente','aprovador','start_date','end_date','executor','etapa','q','assunto_q'].forEach(k => url.searchParams.delete(k));
                 window.history.replaceState({}, '', url.toString());
             } catch (e) {}
             carregarAssuntos();
@@ -498,16 +678,22 @@
             const fAssunto = document.getElementById('filter-assunto').value;
             const fAssuntoQ = document.getElementById('filter-assunto-q').value;
             const fConteudo = document.getElementById('filter-conteudo').value;
-            const fExecutor = document.getElementById('filter-executor').value;
-            const fEtapa = document.getElementById('filter-etapa').value;
+            const execVisible = document.getElementById('filter-executor-visible');
+            const etapaVisible = document.getElementById('filter-etapa-visible');
+            const execHidden = document.getElementById('filter-executor');
+            const etapaHidden = document.getElementById('filter-etapa');
+            const fExecutor = (execVisible ? execVisible.value : (execHidden ? execHidden.value : '')) || '';
+            const fEtapa = (etapaVisible ? etapaVisible.value : (etapaHidden ? etapaHidden.value : '')) || '';
+            if (execHidden) execHidden.value = fExecutor;
+            if (etapaHidden) etapaHidden.value = fEtapa;
             const fAtivo = document.getElementById('filter-ativo').value;
-            const fAprovador = document.getElementById('filter-aprovador').value;
+            const fAtendente = document.getElementById('filter-aprovador').value;
             const urlParams = new URLSearchParams(window.location.search);
             const kpi = urlParams.get('kpi');
             const status = urlParams.get('status');
             
             try {
-                let url = `/api/erp/kanban?id=${fId}&solicitante=${fSol}&start_date=${fStart}&end_date=${fEnd}&tipo=${fTipo}&assunto=${fAssunto}&assunto_q=${encodeURIComponent(fAssuntoQ || '')}&q=${encodeURIComponent(fConteudo || '')}&executor=${encodeURIComponent(fExecutor || '')}&etapa=${encodeURIComponent(fEtapa || '')}&ativo=${fAtivo}&aprovador=${encodeURIComponent(fAprovador)}&encerrados_all=${showAllEncerrados ? '1' : '0'}`;
+                let url = `/api/erp/kanban?id=${fId}&solicitante=${fSol}&start_date=${fStart}&end_date=${fEnd}&tipo=${fTipo}&assunto=${fAssunto}&assunto_q=${encodeURIComponent(fAssuntoQ || '')}&q=${encodeURIComponent(fConteudo || '')}&executor=${encodeURIComponent(fExecutor || '')}&etapa=${encodeURIComponent(fEtapa || '')}&ativo=${fAtivo}&atendente=${encodeURIComponent(fAtendente)}`;
                 if (kpi) url += `&kpi=${encodeURIComponent(kpi)}`;
                 if (status) url += `&status=${encodeURIComponent(status)}`;
                 const response = await fetch(url);
@@ -798,6 +984,11 @@
             }
         }
 
+        document.addEventListener('visibilitychange', () => {
+            if (!tvModeEnabled) return;
+            if (document.visibilityState === 'visible') requestWakeLock();
+        });
+
         async function openDetails(id, columnId = null) {
             const modal = document.getElementById('details-modal');
             const content = document.getElementById('modal-content');
@@ -838,7 +1029,24 @@
                             ${data.criador ? `<p><strong>Criador por:</strong> ${data.criador}</p>` : ``}
                             <p><strong>Chamado:</strong> #${id}</p>
                             <p><strong>Atendente:</strong> ${data.atendente_atual ? escapeHtml(data.atendente_atual) : 'Não definido'}</p>
-                            <p><strong>Solicitante:</strong> ${data.solicitante || 'N/A'}</p>
+                            <p><strong>Solicitante:</strong> ${(data.cod_usuario ? `${data.cod_usuario} - ` : '')}${data.solicitante ? escapeHtml(data.solicitante) : 'N/A'}</p>
+                            ${data.trello && data.trello.integrado ? `
+                                <p><strong>Trello:</strong> Integrado${data.trello.card_id ? ` (${escapeHtml(data.trello.card_id)})` : ''}</p>
+                                <p><strong>Setor:</strong> ${data.trello.setor ? escapeHtml(data.trello.setor) : 'Sem rótulo'}${data.trello.sem_rotulo ? ` <span style="display:inline-block; font-size:0.65rem; padding: 2px 6px; border-radius: 4px; background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; font-weight: bold;">SEM RÓTULO</span>` : ''}</p>
+                            ` : `
+                                <p><strong>Trello:</strong> Não integrado</p>
+                            `}
+                            ${(() => {
+                                const req = (data.aprovacao_gerencia && typeof data.aprovacao_gerencia.solicitado === 'number') ? data.aprovacao_gerencia.solicitado : parseInt((data.aprovacao_gerencia || {}).solicitado || 0);
+                                const appr = (data.aprovacao_gerencia && typeof data.aprovacao_gerencia.aprovado === 'number') ? data.aprovacao_gerencia.aprovado : parseInt((data.aprovacao_gerencia || {}).aprovado || 0);
+                                const show = req > 0;
+                                const ok = show && appr >= req;
+                                const bg = !show ? '#f1f3f4' : (ok ? '#e6f4ea' : '#ffebee');
+                                const color = !show ? '#5f6368' : (ok ? '#1e8e3e' : '#c62828');
+                                const border = !show ? '#dadce0' : (ok ? '#c8e6c9' : '#ffcdd2');
+                                const label = show ? `${appr}/${req}` : 'Não solicitada';
+                                return `<p><strong>Aprovação:</strong> <span title="Aprovação gerência (aprovado/solicitado)" style="font-size: 0.75rem; padding: 2px 8px; border-radius: 6px; background: ${bg}; color: ${color}; border: 1px solid ${border}; font-weight: bold;">${label}</span></p>`;
+                            })()}
                             <p><strong>Título:</strong> ${data.titulo_solicitacao}</p>
                             <p><strong>Descrição:</strong><br><div class="description-text">${data.descr_solicitacao}</div></p>
                             <p><strong>Ativo:</strong> ${data.descr_ativo || 'N/A'}</p>
@@ -996,6 +1204,7 @@
                 const res = await fetch('/api/erp/aprovadores');
                 const aprovadores = await res.json();
                 aprovadoresCache = Array.isArray(aprovadores) ? aprovadores : [];
+                renderExecutorSelect();
             } catch (e) { console.error('Erro aprovadores', e); }
         }
 
@@ -1028,9 +1237,9 @@
             const tipoParam = urlParams.get('tipo');
             const assuntoParam = urlParams.get('assunto');
             const ativoParam = urlParams.get('ativo');
-            const aprovadorParam = urlParams.get('aprovador');
+            const atendenteParam = urlParams.get('atendente') || urlParams.get('aprovador');
             const qParam = urlParams.get('q');
-            const execParam = urlParams.get('executor');
+            let execParam = urlParams.get('executor');
             const etapaParam = urlParams.get('etapa');
 
             const startEl = document.getElementById('filter-start-date');
@@ -1055,8 +1264,21 @@
             if (assuntoParam) document.getElementById('filter-assunto').value = assuntoParam;
             if (ativoParam) document.getElementById('filter-ativo').value = ativoParam;
             if (qParam) document.getElementById('filter-conteudo').value = qParam;
-            if (execParam) document.getElementById('filter-executor').value = execParam;
-            if (etapaParam) document.getElementById('filter-etapa').value = etapaParam;
+            if (execParam) {
+                if (String(execParam).includes(',')) {
+                    execParam = String(execParam).split(',')[0].trim();
+                }
+                const h = document.getElementById('filter-executor');
+                const v = document.getElementById('filter-executor-visible');
+                if (h) h.value = execParam;
+                if (v) v.value = execParam;
+            }
+            if (etapaParam) {
+                const h = document.getElementById('filter-etapa');
+                const v = document.getElementById('filter-etapa-visible');
+                if (h) h.value = etapaParam;
+                if (v) v.value = etapaParam;
+            }
             
             // Agora carregar os dropdowns em cascata já com os valores iniciais se houver
             await carregarAssuntos();
@@ -1065,7 +1287,7 @@
             await carregarTecnicosFiltro();
 
             // Set approver after loading options
-            if (aprovadorParam) document.getElementById('filter-aprovador').value = aprovadorParam;
+            if (atendenteParam) document.getElementById('filter-aprovador').value = atendenteParam;
             
             applyInitialSettings();
             setupEnterToFilter();

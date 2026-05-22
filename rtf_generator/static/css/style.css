@@ -182,6 +182,13 @@ h2 { font-size: 1.2rem; color: #444; margin-bottom: 1rem; display: flex; align-i
     flex-wrap: wrap;
     gap: 15px;
 }
+.tv-mode .dashboard-header {
+    display: none !important;
+}
+.tv-mode .dashboard-actions,
+.tv-mode #dashboard-filters {
+    display: none !important;
+}
 .filter-bar {
     display: flex;
     gap: 10px;
