@@ -33,8 +33,17 @@ class DynamicLDAPBackend(ModelBackend):
             logger.warning("AD auth skipped: missing config fields (host/base_dn/bind_dn/bind_password).")
             return super().authenticate(request, username=username, password=password, **kwargs)
 
-        norm_username = str(username).strip()
-        is_superadmin = norm_username.lower() in set(getattr(settings, "SUPERADMIN_USERNAMES", []) or [])
+        raw_username = str(username).strip()
+        account_name = raw_username
+        if "\\" in account_name:
+            account_name = account_name.split("\\")[-1]
+        if "@" in account_name:
+            account_name = account_name.split("@")[0]
+        account_name = str(account_name).strip()
+        if not account_name:
+            return None
+
+        is_superadmin = account_name.lower() in set(getattr(settings, "SUPERADMIN_USERNAMES", []) or [])
 
         server = Server(host, port=port, use_ssl=use_ssl, get_info=NONE, connect_timeout=10)
         svc_conn = None
@@ -42,7 +51,15 @@ class DynamicLDAPBackend(ModelBackend):
         try:
             svc_conn = Connection(server, user=bind_dn, password=bind_password, auto_bind=True, receive_timeout=10, auto_referrals=False)
 
-            user_filter = f"(sAMAccountName={escape_filter_chars(norm_username)})"
+            escaped_account = escape_filter_chars(account_name)
+            escaped_raw = escape_filter_chars(raw_username)
+            user_filter = (
+                "(|"
+                f"(sAMAccountName={escaped_account})"
+                f"(userPrincipalName={escaped_raw})"
+                f"(mail={escaped_raw})"
+                ")"
+            )
             svc_conn.search(
                 search_base=base_dn,
                 search_filter=user_filter,
@@ -51,7 +68,12 @@ class DynamicLDAPBackend(ModelBackend):
                 size_limit=2,
             )
             if not svc_conn.entries:
-                logger.info("AD auth: user not found in base_dn. username=%s base_dn=%s", str(username), base_dn)
+                logger.info(
+                    "AD auth: user not found in base_dn. username=%s account=%s base_dn=%s",
+                    raw_username,
+                    account_name,
+                    base_dn,
+                )
                 return None
 
             entry = svc_conn.entries[0]
@@ -61,13 +83,13 @@ class DynamicLDAPBackend(ModelBackend):
             except Exception:
                 user_dn = ""
             if not user_dn:
-                logger.info("AD auth: empty DN for user. username=%s base_dn=%s", str(username), base_dn)
+                logger.info("AD auth: empty DN for user. username=%s base_dn=%s", raw_username, base_dn)
                 return None
 
             try:
                 user_conn = Connection(server, user=user_dn, password=str(password), auto_bind=True, receive_timeout=10, auto_referrals=False)
             except Exception as e:
-                logger.info("AD auth: user bind failed. username=%s user_dn=%s err=%s", str(username), user_dn, str(e))
+                logger.info("AD auth: user bind failed. username=%s user_dn=%s err=%s", raw_username, user_dn, str(e))
                 return None
 
             require_dns = cfg.get("require_group_dns") or ([str(cfg.get("require_group_dn") or "").strip()] if str(cfg.get("require_group_dn") or "").strip() else [])
@@ -99,7 +121,7 @@ class DynamicLDAPBackend(ModelBackend):
                 except Exception as e:
                     logger.info(
                         "AD auth: group membership check failed. username=%s user_dn=%s group_dn=%s err=%s",
-                        norm_username,
+                        account_name,
                         user_dn,
                         gdn,
                         str(e),
@@ -108,10 +130,10 @@ class DynamicLDAPBackend(ModelBackend):
 
             if not is_superadmin:
                 if any(_is_member_of(d) for d in (deny_dns or [])):
-                    logger.info("AD auth: denied by group. username=%s user_dn=%s", norm_username, user_dn)
+                    logger.info("AD auth: denied by group. username=%s user_dn=%s", account_name, user_dn)
                     return None
                 if require_dns and not any(_is_member_of(r) for r in (require_dns or [])):
-                    logger.info("AD auth: not in required group. username=%s user_dn=%s", norm_username, user_dn)
+                    logger.info("AD auth: not in required group. username=%s user_dn=%s", account_name, user_dn)
                     return None
 
             is_staff = bool(is_superadmin) or any(_is_member_of(d) for d in (staff_dns or []))
@@ -134,7 +156,7 @@ class DynamicLDAPBackend(ModelBackend):
                 email = ""
 
             UserModel = get_user_model()
-            user_obj, _ = UserModel.objects.get_or_create(username=norm_username)
+            user_obj, _ = UserModel.objects.get_or_create(username=account_name)
             user_obj.first_name = first_name
             user_obj.last_name = last_name
             user_obj.email = email

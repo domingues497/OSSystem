@@ -5,14 +5,22 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import action
-from .models import Consultor, Comissao, Recebimento, AuditLog
-from .serializers import ConsultorSerializer, ComissaoSerializer, RecebimentoSerializer
+from .models import Consultor, Comissao, Recebimento, AuditLog, PeriodoComissao, ComissaoConsultorPeriodo, NotaFiscalComissao
+from .serializers import ConsultorSerializer, ComissaoSerializer, RecebimentoSerializer, PeriodoComissaoSerializer, ComissaoConsultorPeriodoSerializer, NotaFiscalComissaoSerializer
 from django.core.exceptions import ValidationError
 
 @login_required
 @ensure_csrf_cookie
 def dashboard_view(request):
-    return render(request, 'commissions/dashboard.html')
+    can_view = bool(
+        request.user
+        and (
+            request.user.is_superuser
+            or request.user.has_perm("commissions.view_comissao")
+            or request.user.has_perm("commissions.view_comissaoconsultorperiodo")
+        )
+    )
+    return render(request, 'commissions/dashboard.html', {"can_view_commissions": can_view})
 
 def _log_action(request, action, instance, data):
     try:
@@ -47,7 +55,7 @@ def _log_action(request, action, instance, data):
 class ConsultorViewSet(viewsets.ModelViewSet):
     queryset = Consultor.objects.all()
     serializer_class = ConsultorSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.DjangoModelPermissions]
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -66,7 +74,7 @@ class ConsultorViewSet(viewsets.ModelViewSet):
 class ComissaoViewSet(viewsets.ModelViewSet):
     queryset = Comissao.objects.select_related('consultor').prefetch_related('recebimentos').all()
     serializer_class = ComissaoSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.DjangoModelPermissions]
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -85,7 +93,7 @@ class ComissaoViewSet(viewsets.ModelViewSet):
 class RecebimentoViewSet(viewsets.ModelViewSet):
     queryset = Recebimento.objects.all()
     serializer_class = RecebimentoSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.DjangoModelPermissions]
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -109,3 +117,31 @@ class RecebimentoViewSet(viewsets.ModelViewSet):
             return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
         except ValidationError as e:
             return Response({"error": e.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PeriodoComissaoViewSet(viewsets.ModelViewSet):
+    queryset = PeriodoComissao.objects.all()
+    serializer_class = PeriodoComissaoSerializer
+    permission_classes = [permissions.DjangoModelPermissions]
+
+
+class ComissaoConsultorPeriodoViewSet(viewsets.ModelViewSet):
+    queryset = ComissaoConsultorPeriodo.objects.select_related("consultor", "periodo").all()
+    serializer_class = ComissaoConsultorPeriodoSerializer
+    permission_classes = [permissions.DjangoModelPermissions]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        periodo = self.request.query_params.get("periodo_id") or self.request.query_params.get("periodo")
+        consultor = self.request.query_params.get("consultor_id") or self.request.query_params.get("consultor")
+        if periodo and str(periodo).isdigit():
+            qs = qs.filter(periodo_id=int(periodo))
+        if consultor and str(consultor).isdigit():
+            qs = qs.filter(consultor_id=int(consultor))
+        return qs
+
+
+class NotaFiscalComissaoViewSet(viewsets.ModelViewSet):
+    queryset = NotaFiscalComissao.objects.select_related("comissao", "comissao__consultor", "comissao__periodo").all()
+    serializer_class = NotaFiscalComissaoSerializer
+    permission_classes = [permissions.DjangoModelPermissions]

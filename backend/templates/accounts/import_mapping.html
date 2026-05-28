@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block title %}Mapeamento de Colunas{% endblock %}
+
+{% block content %}
+<div class="bg-white rounded-lg shadow border border-slate-100 p-6">
+    <div class="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">Mapeamento de Colunas</h1>
+            <p class="mt-1 text-slate-600">Associe as colunas da origem aos campos internos dos painéis.</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <label class="text-sm text-slate-600">Origem</label>
+            <select id="profileSelect" class="border border-slate-200 rounded px-3 py-2 text-sm bg-white">
+                {% for p in profiles %}
+                    <option value="{{ p.code }}" {% if profile and profile.code == p.code %}selected{% endif %}>
+                        {{ p.name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    {% if saved %}
+        <div class="mt-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded p-3 text-sm">
+            Salvo com sucesso.
+        </div>
+    {% endif %}
+
+    {% if created %}
+        <div class="mt-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded p-3 text-sm">
+            Perfil criado com sucesso.
+        </div>
+    {% endif %}
+
+    {% if create_error %}
+        <div class="mt-4 bg-rose-50 border border-rose-200 text-rose-800 rounded p-3 text-sm">
+            {{ create_error }}
+        </div>
+    {% endif %}
+
+    <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="md:col-span-2">
+            {% if not profile %}
+                <div class="text-slate-600">Nenhum perfil cadastrado.</div>
+            {% else %}
+                <form method="post" class="space-y-4">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="save_mapping">
+
+                    <div class="border border-slate-200 rounded-lg overflow-hidden">
+                        <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 font-semibold text-slate-800">
+                            Campos internos
+                        </div>
+                        <div class="p-4 space-y-3">
+                            {% for f in internal_fields %}
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+                                    <div class="text-sm text-slate-800 font-medium">
+                                        {{ f.label }}{% if f.required %}<span class="text-red-600 ml-1">*</span>{% endif %}
+                                    </div>
+                                    <div class="md:col-span-2 flex gap-3 items-center">
+                                        <select name="map_{{ f.key }}" class="flex-1 border border-slate-200 rounded px-3 py-2 text-sm bg-white">
+                                            <option value="">— não mapear —</option>
+                                            {% for c in columns %}
+                                                <option value="{{ c }}" {% if f.selected == c %}selected{% endif %}>{{ c }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <label class="flex items-center gap-2 text-sm text-slate-600 whitespace-nowrap">
+                                            <input type="checkbox" name="ff_{{ f.key }}" {% if f.ff %}checked{% endif %}>
+                                            Forward-fill
+                                        </label>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="border border-slate-200 rounded-lg overflow-hidden">
+                        <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 font-semibold text-slate-800">
+                            Colunas extras
+                        </div>
+                        <div class="p-4">
+                            <p class="text-sm text-slate-600 mb-3">Se quiser forçar quais extras aparecem no painel, selecione aqui. Se ficar vazio, o painel usa as não mapeadas automaticamente.</p>
+                            <select name="extra_include" multiple size="10" class="w-full border border-slate-200 rounded px-3 py-2 text-sm bg-white">
+                                {% for c in columns %}
+                                    <option value="{{ c }}" {% if c in profile.extra_include %}selected{% endif %}>{{ c }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-3">
+                        <a href="/" class="px-4 py-2 rounded border border-slate-200 text-slate-700 bg-white">Voltar</a>
+                        <button type="submit" class="px-4 py-2 rounded bg-slate-800 text-white">Salvar</button>
+                    </div>
+                </form>
+            {% endif %}
+        </div>
+
+        <div class="md:col-span-1 space-y-4">
+            {% if profile %}
+                <div class="border border-slate-200 rounded-lg p-4">
+                    <div class="font-semibold text-slate-800">Detalhes</div>
+                    <div class="mt-2 text-sm text-slate-600">
+                        <div><span class="font-medium text-slate-700">Código:</span> {{ profile.code }}</div>
+                        <div class="mt-1"><span class="font-medium text-slate-700">Origem:</span> {{ profile.source_type }} — {{ profile.source_identifier }}</div>
+                        {% if profile.description %}
+                            <div class="mt-2">{{ profile.description }}</div>
+                        {% endif %}
+                        <div class="mt-3"><span class="font-medium text-slate-700">Colunas detectadas:</span> {{ columns|length }}</div>
+                    </div>
+                </div>
+            {% endif %}
+
+            <div class="border border-slate-200 rounded-lg p-4">
+                <div class="font-semibold text-slate-800">Novo perfil</div>
+                <form method="post" class="mt-3 space-y-3">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="create_profile">
+                    <div>
+                        <label class="text-sm text-slate-600">Nome</label>
+                        <input name="new_name" class="mt-1 w-full border border-slate-200 rounded px-3 py-2 text-sm" placeholder="Ex.: Programação Safra">
+                    </div>
+                    <div>
+                        <label class="text-sm text-slate-600">Código (opcional)</label>
+                        <input name="new_code" class="mt-1 w-full border border-slate-200 rounded px-3 py-2 text-sm" placeholder="Ex.: viewprogramacao_safra">
+                    </div>
+                    <div>
+                        <label class="text-sm text-slate-600">Tipo</label>
+                        <select name="new_source_type" class="mt-1 w-full border border-slate-200 rounded px-3 py-2 text-sm bg-white">
+                            <option value="db_view">View/Tabela (Postgres)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-sm text-slate-600">Identificador</label>
+                        <input name="new_source_identifier" class="mt-1 w-full border border-slate-200 rounded px-3 py-2 text-sm" placeholder="Ex.: capalti.viewprogramacao">
+                        <div class="mt-1 text-xs text-slate-500">Formato aceito: schema.objeto ou objeto</div>
+                    </div>
+                    <div>
+                        <label class="text-sm text-slate-600">Descrição (opcional)</label>
+                        <input name="new_description" class="mt-1 w-full border border-slate-200 rounded px-3 py-2 text-sm" placeholder="Ex.: Painel de áreas da safra">
+                    </div>
+                    <div class="flex justify-end">
+                        <button type="submit" class="px-4 py-2 rounded bg-slate-800 text-white">Criar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const sel = document.getElementById("profileSelect");
+        if (!sel) return;
+        sel.addEventListener("change", function () {
+            const code = this.value;
+            window.location.href = "/import-mapping/" + code + "/";
+        });
+    })();
+</script>
+{% endblock %}

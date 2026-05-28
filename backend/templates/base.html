@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}SGC{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    {% block head_extra %}{% endblock %}
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <nav class="bg-slate-800 p-4 text-white flex justify-between items-center shadow-md print:hidden">
+        <div class="text-lg font-bold">SGC</div>
+        <div class="flex items-center gap-4">
+            <button id="sidebarToggle" type="button" class="bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded text-sm transition">
+                Menu
+            </button>
+            <span class="text-sm opacity-90">{{ request.user.username }}</span>
+            <form action="/logout/" method="post" class="inline">
+                {% csrf_token %}
+                <button type="submit" class="bg-red-500 hover:bg-red-600 px-3 py-1 rounded text-sm transition">Sair</button>
+            </form>
+        </div>
+    </nav>
+
+    <div class="w-full max-w-none px-6 py-6">
+        <div class="flex gap-6">
+            <aside id="sidebar" class="w-72 shrink-0 print:hidden">
+                <div class="bg-white rounded-lg shadow border border-slate-100">
+                    <div class="px-4 py-3 border-b border-slate-100">
+                        <div class="text-sm font-semibold text-slate-700">Menu</div>
+                    </div>
+
+                    {% if menus %}
+                        <nav class="p-2">
+                            {% for menu in menus %}
+                                <div class="px-2 py-2">
+                                    <div class="text-xs font-bold text-slate-500 uppercase tracking-wide px-2 py-2">
+                                        {{ menu.title }}
+                                    </div>
+                                    <div class="flex flex-col gap-1">
+                                        {% for item in menu.items %}
+                                            <a href="{{ item.path }}" class="px-3 py-2 rounded hover:bg-slate-100 text-slate-700 font-medium">
+                                                {{ item.title }}
+                                            </a>
+                                            {% if item.children %}
+                                                <div class="ml-3 flex flex-col gap-1 border-l border-slate-200 pl-2">
+                                                    {% for c in item.children %}
+                                                        <a href="{{ c.path }}" class="px-3 py-2 rounded hover:bg-slate-100 text-slate-600">
+                                                            {{ c.title }}
+                                                        </a>
+                                                    {% endfor %}
+                                                </div>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </nav>
+                    {% else %}
+                        <div class="p-4 text-sm text-slate-600">
+                            Nenhum módulo liberado.
+                        </div>
+                    {% endif %}
+                </div>
+            </aside>
+
+            <main class="flex-1 min-w-0">
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const key = "sgc:sidebar_hidden:v1";
+            const sidebar = document.getElementById("sidebar");
+            const btn = document.getElementById("sidebarToggle");
+            if (!sidebar || !btn) return;
+
+            const apply = (hidden) => {
+                sidebar.style.display = hidden ? "none" : "";
+                btn.textContent = hidden ? "Mostrar menu" : "Ocultar menu";
+            };
+
+            const initial = localStorage.getItem(key) === "1";
+            apply(initial);
+
+            btn.addEventListener("click", function () {
+                const next = !(localStorage.getItem(key) === "1");
+                localStorage.setItem(key, next ? "1" : "0");
+                apply(next);
+            });
+        })();
+    </script>
+</body>
+</html>

@@ -2,7 +2,8 @@ PS D:\trabalhos faculdaded\OSSystem> cd .\rtf_generator\
 .\venv\Scripts\python.exe app.py
 
 PS D:\trabalhos faculdaded\OSSystem> cd .\backend\
-.\venv\Scripts\python.exe manage.py runserver 8000
+.\venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000
+py manage.py runserver 0.0.0.0:8000 
 
 - Front-end / Dashboard (Flask): http://127.0.0.1:5000
 

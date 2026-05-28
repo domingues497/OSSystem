@@ -8,12 +8,12 @@ from .serializers import WorkOrderSerializer, ERPNoteSerializer
 class WorkOrderViewSet(viewsets.ModelViewSet):
     queryset = WorkOrder.objects.all()
     serializer_class = WorkOrderSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.DjangoModelPermissions]
 
 class ERPNoteViewSet(viewsets.ModelViewSet):
     queryset = ERPNote.objects.all()
     serializer_class = ERPNoteSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.DjangoModelPermissions]
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)

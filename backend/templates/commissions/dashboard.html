@@ -1,38 +1,35 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard de Comissões</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-</head>
-<body class="bg-gray-100 min-h-screen">
+{% extends "base.html" %}
 
+{% block title %}Dashboard de Comissões{% endblock %}
+
+{% block head_extra %}
+<script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+{% endblock %}
+
+{% block content %}
     <form id="csrf-form" class="hidden">{% csrf_token %}</form>
-    
-    <!-- Navbar -->
-    <nav class="bg-green-400 p-4 text-white flex justify-between items-center shadow-md print:hidden">
-        <h1 class="text-xl font-bold">Gestão de Comissões</h1>
-        <div class="flex gap-4 items-center">
-            <span>{{ request.user.username }}</span>
-            <form action="/logout/" method="post" class="inline">
-                {% csrf_token %}
-                <button type="submit" class="bg-red-500 hover:bg-red-600 px-3 py-1 rounded text-sm transition">Sair</button>
-            </form>
-        </div>
-    </nav>
 
-    <!-- App Container with Alpine.js -->
-    <div class="container mx-auto p-6" x-data="commissionsApp()">
+    {% if can_view_commissions %}
+    <div x-data="commissionsApp()">
         
         <div class="flex justify-between items-center mb-6 print:hidden">
             <h2 class="text-2xl font-bold text-gray-800">Dashboard</h2>
-            <div class="flex gap-2">
-                {% if request.user.is_staff or request.user.is_superuser %}
+            <div class="flex gap-2 items-center">
+                <div class="flex items-center gap-2">
+                    <div class="text-sm font-medium text-slate-700">Período</div>
+                    <select x-model="dashboardPeriodoId" @change="onPeriodoChange()" class="border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white">
+                        <option value="" disabled>Selecione</option>
+                        <template x-for="p in periodos" :key="p.id">
+                            <option :value="p.id" x-text="`${String(p.referencia_mes).padStart(2,'0')}/${p.referencia_ano}`"></option>
+                        </template>
+                    </select>
+                </div>
+                {% if perms.commissions.add_consultor %}
                 <button @click="openConsultorModal()" class="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded shadow transition">
                     + Consultor
                 </button>
+                {% endif %}
+                {% if perms.commissions.add_comissaoconsultorperiodo or perms.commissions.add_comissao %}
                 <button @click="openComissaoModal()" class="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded shadow transition">
                     + Comissão
                 </button>
@@ -65,85 +62,33 @@
                     <thead class="bg-gray-50 border-b border-gray-200 text-gray-700">
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Consultor</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Valor Total</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Recebido</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Saldo Pendente</th>
-                            <th class="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider print:hidden">Ações</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Tipo</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Valor Apurado</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Fechado em</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-gray-200">
-                        <template x-for="comissao in comissoes" :key="comissao.id">
+                    <template x-for="row in consultorRows" :key="row.consultor.id">
+                        <tbody class="divide-y divide-gray-200">
                             <tr class="hover:bg-gray-50 transition">
                                 <td class="px-6 py-4">
-                                    <div class="font-medium text-gray-900" x-text="comissao.consultor.nome"></div>
-                                    <div class="text-sm text-gray-500" x-text="comissao.consultor.email"></div>
+                                    <div class="font-medium text-gray-900" x-text="row.consultor.nome"></div>
+                                    <div class="text-sm text-gray-500" x-text="row.consultor.email"></div>
                                 </td>
-                                <td class="px-6 py-4 text-gray-700 font-semibold" x-text="formatCurrency(comissao.valor_total)"></td>
-                                <td class="px-6 py-4 text-green-600 font-semibold" x-text="formatCurrency(comissao.valor_recebido)"></td>
-                                <td class="px-6 py-4 font-bold" 
-                                    :class="comissao.saldo_pendente > 0 ? 'text-orange-500' : 'text-gray-400'"
-                                    x-text="formatCurrency(comissao.saldo_pendente)">
+                                <td class="px-6 py-4 text-gray-700" x-text="row.consultor.tipo_contrato || '-'"></td>
+                                <td class="px-6 py-4 text-gray-700 font-semibold" x-text="row.comissao ? formatCurrency(row.comissao.valor_apurado) : '-'"></td>
+                                <td class="px-6 py-4">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold"
+                                        :class="!row.comissao ? 'bg-gray-100 text-gray-700' : (row.comissao.status === 'pago' ? 'bg-green-100 text-green-700' : (row.comissao.status === 'faturado' ? 'bg-blue-100 text-blue-700' : (row.comissao.status === 'fechado' ? 'bg-slate-100 text-slate-700' : 'bg-yellow-100 text-yellow-700')))"
+                                        x-text="(!row.comissao ? 'SEM COMISSÃO' : (row.comissao.status || '').toUpperCase())">
+                                    </span>
                                 </td>
-                                <td class="px-6 py-4 text-center print:hidden">
-                                    <div class="flex items-center justify-center gap-2">
-                                        <button @click="toggleRecebimentos(comissao.id)" 
-                                                class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1 rounded shadow-sm text-sm font-medium transition">
-                                            Notas (<span x-text="(comissao.recebimentos || []).length"></span>)
-                                        </button>
-                                        <button @click="openModal(comissao)" 
-                                                class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1 rounded shadow-sm text-sm font-medium transition"
-                                                :disabled="comissao.saldo_pendente <= 0"
-                                                :class="comissao.saldo_pendente <= 0 ? 'opacity-50 cursor-not-allowed' : ''">
-                                            + Adicionar Nota
-                                        </button>
-                                    </div>
-                                </td>
+                                <td class="px-6 py-4 text-gray-700" x-text="row.comissao ? formatDateTime(row.comissao.data_fechamento) : ''"></td>
                             </tr>
-                            <tr x-show="expandedComissaoId === comissao.id" class="bg-slate-50">
-                                <td colspan="5" class="px-6 py-4">
-                                    <div class="flex items-center justify-between mb-3">
-                                        <div class="text-sm font-semibold text-slate-800">
-                                            Recebimentos (NF)
-                                        </div>
-                                        <button @click="toggleRecebimentos(comissao.id)" class="text-sm text-slate-600 hover:text-slate-900">
-                                            Fechar
-                                        </button>
-                                    </div>
-
-                                    <div x-show="(comissao.recebimentos || []).length === 0" class="text-sm text-slate-500 bg-white rounded border border-slate-200 p-4" style="display: none;">
-                                        Nenhuma nota cadastrada para esta comissão.
-                                    </div>
-
-                                    <div x-show="(comissao.recebimentos || []).length > 0" class="overflow-x-auto rounded border border-slate-200 bg-white" style="display: none;">
-                                        <table class="w-full text-sm">
-                                            <thead class="bg-slate-100 text-slate-700">
-                                                <tr>
-                                                    <th class="px-3 py-2 text-left font-semibold">NF</th>
-                                                    <th class="px-3 py-2 text-left font-semibold">Data</th>
-                                                    <th class="px-3 py-2 text-left font-semibold">Valor</th>
-                                                    <th class="px-3 py-2 text-left font-semibold">Descrição</th>
-                                                    <th class="px-3 py-2 text-left font-semibold">Observações</th>
-                                                    <th class="px-3 py-2 text-left font-semibold">Lançado</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody class="divide-y divide-slate-100">
-                                                <template x-for="r in sortRecebimentos(comissao.recebimentos || [])" :key="r.id">
-                                                    <tr>
-                                                        <td class="px-3 py-2 font-medium text-slate-900" x-text="r.numero_nota"></td>
-                                                        <td class="px-3 py-2 text-slate-700" x-text="formatDate(r.data_nota)"></td>
-                                                        <td class="px-3 py-2 text-slate-700 font-semibold" x-text="formatCurrency(r.valor_pago)"></td>
-                                                        <td class="px-3 py-2 text-slate-700" x-text="r.descricao || '-'"></td>
-                                                        <td class="px-3 py-2 text-slate-700" x-text="r.observacoes || '-'"></td>
-                                                        <td class="px-3 py-2 text-slate-600" x-text="formatDateTime(r.created_at)"></td>
-                                                    </tr>
-                                                </template>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </td>
-                            </tr>
-                        </template>
-                        <tr x-show="comissoes.length === 0">
+                        </tbody>
+                    </template>
+                    <tbody x-show="consultorRows.length === 0" style="display: none;">
+                        <tr>
                             <td colspan="5" class="px-6 py-8 text-center text-gray-500">Nenhuma comissão encontrada.</td>
                         </tr>
                     </tbody>
@@ -287,6 +232,15 @@
                                 </div>
                                 <form @submit.prevent="submitComissao" class="space-y-4">
                                     <div>
+                                        <label class="block text-sm font-medium text-gray-700">Período (mês fechado)</label>
+                                        <select x-model="comissaoForm.periodo_id" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                            <option value="" disabled>Selecione um período</option>
+                                            <template x-for="p in periodos" :key="p.id">
+                                                <option :value="p.id" x-text="`${String(p.referencia_mes).padStart(2,'0')}/${p.referencia_ano} (${formatDate(p.data_inicial)} a ${formatDate(p.data_final)}) - ${(p.status || '').toUpperCase()}`"></option>
+                                            </template>
+                                        </select>
+                                    </div>
+                                    <div>
                                         <label class="block text-sm font-medium text-gray-700">Consultor</label>
                                         <select x-model="comissaoForm.consultor_id" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
                                             <option value="" disabled>Selecione um consultor</option>
@@ -296,8 +250,8 @@
                                         </select>
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700">Valor Total (R$)</label>
-                                        <input type="number" step="0.01" min="0.01" x-model="comissaoForm.valor_total" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                        <label class="block text-sm font-medium text-gray-700">Valor Apurado (R$)</label>
+                                        <input type="number" step="0.01" min="0.00" x-model="comissaoForm.valor_apurado" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
                                     </div>
                                 </form>
                             </div>
@@ -317,6 +271,12 @@
         </div>
 
     </div>
+    {% else %}
+    <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-xl font-bold text-gray-800">Acesso não liberado</h2>
+        <p class="mt-2 text-gray-600">Solicite ao administrador a liberação do módulo de Comissões para o seu usuário ou grupo.</p>
+    </div>
+    {% endif %}
 
     <script>
         function getCookie(name) {
@@ -346,6 +306,8 @@
             Alpine.data('commissionsApp', () => ({
                 comissoes: [],
                 consultores: [],
+                periodos: [],
+                consultorRows: [],
                 loading: true,
                 modalOpen: false,
                 consultorModalOpen: false,
@@ -370,14 +332,16 @@
                     email: '',
                     telefone: ''
                 },
+                dashboardPeriodoId: '',
                 comissaoForm: {
+                    periodo_id: '',
                     consultor_id: '',
-                    valor_total: ''
+                    valor_apurado: ''
                 },
 
                 init() {
                     this.fetchConsultores();
-                    this.fetchComissoes();
+                    this.fetchPeriodos();
                 },
 
                 async fetchConsultores() {
@@ -385,21 +349,32 @@
                         const response = await fetch('/api/commissions/consultores/', { credentials: 'same-origin' });
                         if (!response.ok) throw new Error('Erro ao buscar consultores');
                         this.consultores = await response.json();
+                        this.rebuildRows();
                     } catch (error) {
                         console.error(error);
                         this.consultores = [];
+                        this.rebuildRows();
                     }
                 },
 
                 async fetchComissoes() {
                     this.loading = true;
                     try {
-                        const response = await fetch('/api/commissions/comissoes/', { credentials: 'same-origin' });
+                        if (!this.dashboardPeriodoId) {
+                            this.comissoes = [];
+                            this.rebuildRows();
+                            return;
+                        }
+                        const url = `/api/commissions/comissoes-periodo/?periodo_id=${encodeURIComponent(this.dashboardPeriodoId)}`;
+                        const response = await fetch(url, { credentials: 'same-origin' });
                         if (!response.ok) throw new Error('Erro ao buscar dados');
                         this.comissoes = await response.json();
+                        this.rebuildRows();
                     } catch (error) {
                         console.error(error);
                         alert('Falha ao carregar as comissões.');
+                        this.comissoes = [];
+                        this.rebuildRows();
                     } finally {
                         this.loading = false;
                     }
@@ -428,6 +403,50 @@
                     const dt = new Date(String(value));
                     if (isNaN(dt.getTime())) return String(value);
                     return dt.toLocaleString('pt-BR');
+                },
+
+                formatPeriodo(periodo) {
+                    if (!periodo) return '';
+                    const mes = String(periodo.referencia_mes || '').padStart(2, '0');
+                    const ano = String(periodo.referencia_ano || '');
+                    if (mes && ano) return `${mes}/${ano}`;
+                    return '';
+                },
+
+                async fetchPeriodos() {
+                    try {
+                        const response = await fetch('/api/commissions/periodos/', { credentials: 'same-origin' });
+                        if (!response.ok) throw new Error('Erro ao buscar períodos');
+                        this.periodos = await response.json();
+                        if (!this.dashboardPeriodoId && this.periodos.length) {
+                            this.dashboardPeriodoId = String(this.periodos[0].id);
+                            this.comissaoForm.periodo_id = String(this.periodos[0].id);
+                            await this.fetchComissoes();
+                        }
+                    } catch (error) {
+                        console.error(error);
+                        this.periodos = [];
+                    }
+                },
+
+                onPeriodoChange() {
+                    this.comissaoForm.periodo_id = this.dashboardPeriodoId || '';
+                    this.fetchComissoes();
+                },
+
+                rebuildRows() {
+                    const map = {};
+                    for (const c of (Array.isArray(this.comissoes) ? this.comissoes : [])) {
+                        if (c && c.consultor && c.consultor.id != null) {
+                            map[String(c.consultor.id)] = c;
+                        }
+                    }
+                    const consultores = Array.isArray(this.consultores) ? [...this.consultores] : [];
+                    consultores.sort((a, b) => String(a?.nome || '').localeCompare(String(b?.nome || ''), 'pt-BR'));
+                    this.consultorRows = consultores.map((c) => ({
+                        consultor: c,
+                        comissao: map[String(c.id)] || null,
+                    }));
                 },
 
                 sortRecebimentos(list) {
@@ -520,10 +539,13 @@
 
                 openComissaoModal() {
                     this.comissaoFormError = '';
-                    this.comissaoForm = { consultor_id: '', valor_total: '' };
+                    this.comissaoForm = { periodo_id: this.dashboardPeriodoId || '', consultor_id: '', valor_apurado: '' };
                     this.comissaoModalOpen = true;
                     if (!this.consultores.length) {
                         this.fetchConsultores();
+                    }
+                    if (!this.periodos.length) {
+                        this.fetchPeriodos();
                     }
                 },
 
@@ -532,14 +554,14 @@
                 },
 
                 async submitComissao() {
-                    if (!this.comissaoForm.consultor_id || !this.comissaoForm.valor_total) {
+                    if (!this.comissaoForm.periodo_id || !this.comissaoForm.consultor_id || this.comissaoForm.valor_apurado === '') {
                         this.comissaoFormError = 'Preencha todos os campos.';
                         return;
                     }
 
-                    const valorTotal = parseFloat(this.comissaoForm.valor_total);
-                    if (isNaN(valorTotal) || valorTotal <= 0) {
-                        this.comissaoFormError = 'Informe um valor total válido.';
+                    const valorApurado = parseFloat(this.comissaoForm.valor_apurado);
+                    if (isNaN(valorApurado) || valorApurado < 0) {
+                        this.comissaoFormError = 'Informe um valor apurado válido.';
                         return;
                     }
 
@@ -547,7 +569,7 @@
                     this.comissaoFormError = '';
 
                     try {
-                        const response = await fetch('/api/commissions/comissoes/', {
+                        const response = await fetch('/api/commissions/comissoes-periodo/', {
                             method: 'POST',
                             credentials: 'same-origin',
                             headers: {
@@ -555,15 +577,19 @@
                                 'X-CSRFToken': getCsrfToken()
                             },
                             body: JSON.stringify({
+                                periodo_id: this.comissaoForm.periodo_id,
                                 consultor_id: this.comissaoForm.consultor_id,
-                                valor_total: valorTotal
+                                valor_apurado: valorApurado,
+                                status: 'fechado'
                             })
                         });
 
                         const data = await response.json();
                         if (!response.ok) {
-                            if (data.valor_total) throw new Error(data.valor_total[0]);
+                            if (data.periodo_id) throw new Error(data.periodo_id[0]);
                             if (data.consultor_id) throw new Error(data.consultor_id[0]);
+                            if (data.valor_apurado) throw new Error(data.valor_apurado[0]);
+                            if (data.non_field_errors) throw new Error(data.non_field_errors[0]);
                             throw new Error('Erro ao cadastrar comissão.');
                         }
 
@@ -638,5 +664,4 @@
             }));
         });
     </script>
-</body>
-</html>
+{% endblock %}
