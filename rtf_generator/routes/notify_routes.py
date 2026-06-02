@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, request
 import os
+import shutil
 from datetime import datetime
 
 from repositories.erp_repository import ERPRepository
@@ -10,6 +11,166 @@ from config import Config
 from utils.datetime_utils import erp_to_datetime, add_business_minutes, business_minutes_between
 
 notify_bp = Blueprint('notify', __name__)
+
+def _format_br_dt_yy_hhmm(dt_str):
+    try:
+        dt = datetime.strptime((dt_str or "").strip(), "%Y-%m-%d %H:%M:%S")
+        return dt.strftime("%d/%m/%y %H:%M")
+    except Exception:
+        return ""
+
+def _access_log_path():
+    return os.path.join(os.path.dirname(os.path.dirname(__file__)), "access.log")
+
+def _claim_access_log(original_path):
+    original_path = (original_path or "").strip()
+    if not original_path:
+        return None
+    if not os.path.exists(original_path):
+        return None
+    candidate = original_path + ".sending"
+    try:
+        os.replace(original_path, candidate)
+        return candidate
+    except Exception:
+        try:
+            if os.path.exists(candidate):
+                return None
+            os.replace(original_path, candidate)
+            return candidate
+        except Exception:
+            return None
+
+def _restore_access_log(claimed_path, original_path):
+    try:
+        if not claimed_path or not original_path:
+            return
+        if not os.path.exists(claimed_path):
+            return
+        if not os.path.exists(original_path):
+            os.replace(claimed_path, original_path)
+            return
+        merged_path = original_path + ".merge"
+        with open(merged_path, "wb") as out:
+            with open(claimed_path, "rb") as f1:
+                shutil.copyfileobj(f1, out)
+            with open(original_path, "rb") as f2:
+                shutil.copyfileobj(f2, out)
+        os.replace(merged_path, original_path)
+        try:
+            os.remove(claimed_path)
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+def run_access_report_job(force=False, dry_run=False):
+    tg_targets = [t.strip() for t in (os.getenv("TELEGRAM_CHAT_IDS", "") or "").split(",") if t.strip()]
+    has_tg = bool(os.getenv("TELEGRAM_BOT_TOKEN")) and bool(tg_targets)
+    if not dry_run and not has_tg:
+        return {"status": 400, "payload": {"error": "Configure TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_IDS"}}
+
+    now = datetime.now()
+    if not force:
+        if (now.hour < 18) or (now.hour == 18 and now.minute < 30):
+            return {"status": 400, "payload": {"error": "Aguarde 18:30 ou use force=1"}}
+
+    log_path = _access_log_path()
+    claimed = _claim_access_log(log_path)
+    if not claimed:
+        return {"status": 200, "payload": {"message": "Nenhum acesso registrado ou log já apagado"}}
+
+    ips_data = {}
+    total_requests = 0
+    last_access_raw = ""
+
+    try:
+        with open(claimed, "r", encoding="utf-8") as f:
+            for line in f:
+                parts = line.strip().split("|")
+                if len(parts) >= 4:
+                    dt_str, ip = parts[0], parts[1]
+                    if not ip:
+                        continue
+                    total_requests += 1
+                    if not last_access_raw or dt_str > last_access_raw:
+                        last_access_raw = dt_str
+                    if ip not in ips_data:
+                        ips_data[ip] = {"count": 0, "last_seen": ""}
+                    ips_data[ip]["count"] += 1
+                    ips_data[ip]["last_seen"] = dt_str
+
+        uniq = len(ips_data)
+        if uniq == 0:
+            if not dry_run:
+                _restore_access_log(claimed, log_path)
+            return {"status": 200, "payload": {"message": "Nenhum acesso válido no log"}}
+
+        d_label = now.strftime("%d/%m/%Y")
+        last_access_br = _format_br_dt_yy_hhmm(last_access_raw)
+        lines = [
+            f"Acessos ({d_label})",
+            f"Último acesso: {last_access_br}" if last_access_br else "Último acesso: -",
+            f"IPs únicos: {uniq} | Requisições: {total_requests}",
+        ]
+
+        sorted_ips = sorted(ips_data.items(), key=lambda x: x[1]["count"], reverse=True)
+        max_ips = 60
+        for ip, data in sorted_ips[:max_ips]:
+            cnt = data["count"]
+            last_seen = data["last_seen"]
+            last_hhmm = last_seen[11:16] if len(last_seen) >= 16 else ""
+            lines.append(f"- {ip} ({cnt}) {last_hhmm}".rstrip())
+
+        if uniq > max_ips:
+            lines.append(f"... +{uniq - max_ips} IPs")
+
+        msg = "\n".join(lines)
+        if dry_run:
+            _restore_access_log(claimed, log_path)
+            return {
+                "status": 200,
+                "payload": {
+                    "dry_run": True,
+                    "unique_ips": uniq,
+                    "total_requests": total_requests,
+                    "last_access_raw": last_access_raw,
+                    "last_access_br": last_access_br,
+                    "message": msg,
+                },
+            }
+
+        tg = TelegramService()
+        ok = False
+        for chat_id in tg_targets:
+            if tg.send(chat_id, msg):
+                ok = True
+
+        if ok:
+            try:
+                os.remove(claimed)
+            except Exception:
+                pass
+            return {
+                "status": 200,
+                "payload": {
+                    "sent": True,
+                    "unique_ips": uniq,
+                    "total_requests": total_requests,
+                    "last_access_raw": last_access_raw,
+                    "last_access_br": last_access_br,
+                },
+            }
+
+        extra = {}
+        if getattr(tg, "last_error", None):
+            extra["telegram_error"] = tg.last_error
+        _restore_access_log(claimed, log_path)
+        return {"status": 500, "payload": {"sent": False, "error": "Falha ao enviar Telegram", **extra}}
+    except Exception as e:
+        if not dry_run:
+            _restore_access_log(claimed, log_path)
+        raise e
 
 @notify_bp.route('/pending', methods=['POST'])
 def notify_pending_first_attendance():
@@ -198,79 +359,9 @@ def notify_opened_tickets():
 @notify_bp.route('/access_report', methods=['POST'])
 def notify_access_report():
     try:
-        tg_targets = [t.strip() for t in (os.getenv("TELEGRAM_CHAT_IDS", "") or "").split(",") if t.strip()]
-        has_tg = bool(os.getenv("TELEGRAM_BOT_TOKEN")) and bool(tg_targets)
         force = str(request.args.get('force', '')).strip().lower() in {'1', 'true', 'yes'}
         dry_run = str(request.args.get('dry_run', '')).strip().lower() in {'1', 'true', 'yes'}
-        
-        if not dry_run and not has_tg:
-            return jsonify({"error": "Configure TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_IDS"}), 400
-
-        now = datetime.now()
-        if not force:
-            if (now.hour < 18) or (now.hour == 18 and now.minute < 30):
-                return jsonify({"error": "Aguarde 18:30 ou use force=1"}), 400
-
-        # O log agora fica em rtf_generator/access.log
-        log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "access.log")
-        
-        if not os.path.exists(log_path):
-            return jsonify({"message": "Nenhum acesso registrado ou log já apagado"}), 200
-
-        ips_data = {}
-        total_requests = 0
-        
-        with open(log_path, "r", encoding="utf-8") as f:
-            for line in f:
-                parts = line.strip().split("|")
-                if len(parts) >= 4:
-                    dt_str, ip, path, ua = parts[0], parts[1], parts[2], parts[3]
-                    if not ip: continue
-                    total_requests += 1
-                    if ip not in ips_data:
-                        ips_data[ip] = {"count": 0, "last_seen": ""}
-                    ips_data[ip]["count"] += 1
-                    ips_data[ip]["last_seen"] = dt_str
-
-        uniq = len(ips_data)
-        if uniq == 0:
-            return jsonify({"message": "Nenhum acesso válido no log"}), 200
-
-        d_label = now.strftime('%d/%m/%Y')
-        lines = [f"Acessos ({d_label})", f"IPs únicos: {uniq} | Requisições: {total_requests}"]
-
-        sorted_ips = sorted(ips_data.items(), key=lambda x: x[1]["count"], reverse=True)
-        max_ips = 60
-        for ip, data in sorted_ips[:max_ips]:
-            cnt = data["count"]
-            last_seen = data["last_seen"]
-            last_hhmm = last_seen[11:16] if len(last_seen) >= 16 else ""
-            lines.append(f"- {ip} ({cnt}) {last_hhmm}".rstrip())
-            
-        if uniq > max_ips:
-            lines.append(f"... +{uniq - max_ips} IPs")
-
-        msg = "\n".join(lines)
-        if dry_run:
-            return jsonify({"dry_run": True, "unique_ips": uniq, "total_requests": total_requests, "message": msg})
-
-        tg = TelegramService()
-        ok = False
-        for chat_id in tg_targets:
-            if tg.send(chat_id, msg):
-                ok = True
-                
-        if ok:
-            # Apaga o log após o envio bem-sucedido
-            try:
-                os.remove(log_path)
-            except Exception as e:
-                pass
-            return jsonify({"sent": True, "unique_ips": uniq, "total_requests": total_requests})
-            
-        extra = {}
-        if getattr(tg, "last_error", None):
-            extra["telegram_error"] = tg.last_error
-        return jsonify({"sent": False, "error": "Falha ao enviar Telegram", **extra}), 500
+        result = run_access_report_job(force=force, dry_run=dry_run)
+        return jsonify(result["payload"]), int(result["status"])
     except Exception as e:
         return jsonify({"error": str(e)}), 500
