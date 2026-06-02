@@ -120,7 +120,10 @@
                     <div class="charts-inner-grid" style="grid-template-columns: 65% 35%;">
                         <div class="chart-item evolution-chart">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                                <h3 style="font-size: 0.95rem; color: #555; margin: 0;">Evolução de Chamados</h3>
+                                <h3 style="font-size: 0.95rem; color: #555; margin: 0; display: flex; align-items: center; gap: 8px;">
+                                    Evolução de Chamados
+                                    <span id="evolution-datetime" style="font-size: 0.95rem; color: #555; font-weight: 600;"></span>
+                                </h3>
                                 <div id="period-totals" style="display: flex; gap: 15px; font-size: 0.8rem; font-weight: 600;">
                                     <span style="color: #1a73e8; background: #e8f0fe; padding: 2px 8px; border-radius: 4px;">
                                         Abertos: <span id="total-abertos-periodo">0</span>
@@ -197,6 +200,23 @@
         let printClicks = 0;
         let printLast = 0;
         let printTimer = null;
+        let evolutionDateTimeTimer = null;
+
+        function formatDashboardDateTime(date) {
+            const d = date || new Date();
+            const dd = String(d.getDate()).padStart(2, '0');
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const yy = String(d.getFullYear()).slice(-2);
+            const hh = String(d.getHours()).padStart(2, '0');
+            const mi = String(d.getMinutes()).padStart(2, '0');
+            return `${dd}/${mm}/${yy} ${hh}:${mi}`;
+        }
+
+        function updateEvolutionDateTime() {
+            const el = document.getElementById('evolution-datetime');
+            if (!el) return;
+            el.textContent = formatDashboardDateTime(new Date());
+        }
 
         function applyInitialSettings() {
             // Aplicar intervalo de atualização
@@ -206,6 +226,10 @@
                 select.value = savedInterval;
                 setupAutoRefresh();
             }
+
+            updateEvolutionDateTime();
+            if (evolutionDateTimeTimer) clearInterval(evolutionDateTimeTimer);
+            evolutionDateTimeTimer = setInterval(updateEvolutionDateTime, 30000);
 
             // Aplicar estado inicial do som
             const btnSound = document.getElementById('toggle-sound');
