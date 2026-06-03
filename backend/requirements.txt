@@ -7,3 +7,4 @@ django-cors-headers
 django-auth-ldap
 ldap3
 cryptography
+openpyxl

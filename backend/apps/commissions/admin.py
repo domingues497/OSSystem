@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Consultor, Comissao, Recebimento, AuditLog, PeriodoComissao, ComissaoConsultorPeriodo, NotaFiscalComissao
+from .models import Consultor, Comissao, Recebimento, AuditLog, PeriodoComissao, ComissaoConsultorPeriodo, NotaFiscalComissao, DuplicataAssinatura
 
 
 @admin.register(Consultor)
@@ -53,3 +53,10 @@ class NotaFiscalComissaoAdmin(admin.ModelAdmin):
     list_filter = ["status", "data_emissao"]
     search_fields = ["numero_nota", "comissao__consultor__nome"]
     list_select_related = ["comissao", "comissao__consultor", "comissao__periodo"]
+
+
+@admin.register(DuplicataAssinatura)
+class DuplicataAssinaturaAdmin(admin.ModelAdmin):
+    list_display = ["id", "estab", "pessoa", "cnpjf", "docto", "parcela", "seqitem", "assinada", "representante", "dtvencto"]
+    list_filter = ["assinada", "local", "representante"]
+    search_fields = ["pessoa", "representante", "item", "grupocomissao", "docto", "cnpjf"]

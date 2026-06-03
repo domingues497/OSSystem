@@ -5,8 +5,8 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import action
-from .models import Consultor, Comissao, Recebimento, AuditLog, PeriodoComissao, ComissaoConsultorPeriodo, NotaFiscalComissao
-from .serializers import ConsultorSerializer, ComissaoSerializer, RecebimentoSerializer, PeriodoComissaoSerializer, ComissaoConsultorPeriodoSerializer, NotaFiscalComissaoSerializer
+from .models import Consultor, Comissao, Recebimento, AuditLog, PeriodoComissao, ComissaoConsultorPeriodo, NotaFiscalComissao, DuplicataAssinatura
+from .serializers import ConsultorSerializer, ComissaoSerializer, RecebimentoSerializer, PeriodoComissaoSerializer, ComissaoConsultorPeriodoSerializer, NotaFiscalComissaoSerializer, DuplicataAssinaturaSerializer
 from django.core.exceptions import ValidationError
 
 @login_required
@@ -145,3 +145,27 @@ class NotaFiscalComissaoViewSet(viewsets.ModelViewSet):
     queryset = NotaFiscalComissao.objects.select_related("comissao", "comissao__consultor", "comissao__periodo").all()
     serializer_class = NotaFiscalComissaoSerializer
     permission_classes = [permissions.DjangoModelPermissions]
+
+
+class DuplicataAssinaturaViewSet(viewsets.ModelViewSet):
+    queryset = DuplicataAssinatura.objects.all()
+    serializer_class = DuplicataAssinaturaSerializer
+    permission_classes = [permissions.DjangoModelPermissions]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        assinada = self.request.query_params.get("assinada")
+        docto = self.request.query_params.get("docto")
+        cnpjf = self.request.query_params.get("cnpjf")
+        representante = self.request.query_params.get("representante")
+
+        if assinada is not None and str(assinada).strip() != "":
+            val = str(assinada).strip().lower() in {"1", "true", "yes", "y", "on"}
+            qs = qs.filter(assinada=val)
+        if docto and str(docto).isdigit():
+            qs = qs.filter(docto=int(docto))
+        if cnpjf and str(cnpjf).isdigit():
+            qs = qs.filter(cnpjf=int(cnpjf))
+        if representante:
+            qs = qs.filter(representante__icontains=str(representante).strip())
+        return qs

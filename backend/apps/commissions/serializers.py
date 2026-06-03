@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Consultor, Comissao, Recebimento, PeriodoComissao, ComissaoConsultorPeriodo, NotaFiscalComissao
+from .models import Consultor, Comissao, Recebimento, PeriodoComissao, ComissaoConsultorPeriodo, NotaFiscalComissao, DuplicataAssinatura
 
 class ConsultorSerializer(serializers.ModelSerializer):
     class Meta:
@@ -76,3 +76,9 @@ class NotaFiscalComissaoSerializer(serializers.ModelSerializer):
             "status",
             "created_at",
         ]
+
+
+class DuplicataAssinaturaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DuplicataAssinatura
+        fields = "__all__"

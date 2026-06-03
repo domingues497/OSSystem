@@ -206,3 +206,37 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"{self.action} {self.entity_type}#{self.entity_id}"
+
+
+class DuplicataAssinatura(models.Model):
+    estab = models.IntegerField()
+    pessoa = models.CharField(max_length=255, blank=True, default="")
+    cnpjf = models.BigIntegerField(null=True, blank=True)
+    docto = models.BigIntegerField()
+    parcela = models.IntegerField()
+    local = models.CharField(max_length=100, blank=True, default="")
+    assinada = models.BooleanField(default=False, db_index=True)
+    representante = models.CharField(max_length=255, blank=True, default="")
+    dtemissao = models.DateField(null=True, blank=True)
+    dtvencto = models.DateField(null=True, blank=True)
+    seqitem = models.IntegerField()
+    item = models.CharField(max_length=255, blank=True, default="")
+    grupocomissao = models.CharField(max_length=255, blank=True, default="")
+    comissaopercent = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    tabprc = models.IntegerField(null=True, blank=True)
+    tabela = models.CharField(max_length=255, blank=True, default="")
+    vlr_proporcional_item = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    previsao_comissao = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    comissao_paga = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["estab", "docto", "parcela", "seqitem"],
+                name="uq_duplicata_assinatura_item",
+            ),
+        ]
+        ordering = ["-dtvencto", "-docto", "parcela", "seqitem"]
+
+    def __str__(self):
+        return f"{self.estab}-{self.docto}/{self.parcela} · item {self.seqitem} · {'ASSINADA' if self.assinada else 'PENDENTE'}"
