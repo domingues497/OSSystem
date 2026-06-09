@@ -210,6 +210,7 @@
                             <span class="kanban-count" id="count-andamento">0</span>
                         </div>
                     </div>
+                    <div class="kanban-organizer" id="organizer-andamento"></div>
                     <div class="kanban-cards" id="cards-andamento"></div>
                 </div>
                 <div class="kanban-column" id="col-avaliacao">
@@ -277,6 +278,8 @@
         let onlyApproved = false;
         let aguardandoFilter = localStorage.getItem('chamados-aguardando-filter') || 'all';
         if (!['all', 'waiting', 'approved'].includes(aguardandoFilter)) aguardandoFilter = 'all';
+        let andamentoFilter = localStorage.getItem('chamados-andamento-filter') || 'all';
+        if (!['all', 'integrated', 'not_integrated'].includes(andamentoFilter)) andamentoFilter = 'all';
 
         function setupAutoRefresh() {
             if(refreshTimer) clearInterval(refreshTimer);
@@ -735,6 +738,13 @@
             renderTodasColunas();
         }
 
+        function toggleAndamentoFilter(mode) {
+            if (andamentoFilter === mode) andamentoFilter = 'all';
+            else andamentoFilter = mode;
+            localStorage.setItem('chamados-andamento-filter', andamentoFilter);
+            renderTodasColunas();
+        }
+
         function renderTodasColunas() {
             if (!lastKanbanData) return;
             currentKanbanView = {};
@@ -757,6 +767,12 @@
                         tickets = baseTickets.filter(t => !!t.waiting_auth);
                     } else if (aguardandoFilter === 'approved') {
                         tickets = baseTickets.filter(t => !!t.auth_approved && !t.waiting_auth);
+                    }
+                } else if (col === 'andamento') {
+                    if (andamentoFilter === 'integrated') {
+                        tickets = baseTickets.filter(t => !!t.trello_integrado);
+                    } else if (andamentoFilter === 'not_integrated') {
+                        tickets = baseTickets.filter(t => !t.trello_integrado);
                     }
                 }
                 tickets.sort((a, b) => {
@@ -810,6 +826,26 @@
                     organizer.innerHTML =
                         chip('Autorização', '#ef5350', counts.waiting, 'waiting', aguardandoFilter === 'waiting') +
                         chip('Aprovado', '#34a853', counts.approved, 'approved', aguardandoFilter === 'approved');
+                }
+            } else if (id === 'andamento') {
+                const organizer = document.getElementById('organizer-andamento');
+                const src = baseTickets || tickets;
+                const counts = { integrated: 0, notIntegrated: 0 };
+                src.forEach(t => {
+                    if (t.trello_integrado) counts.integrated += 1;
+                    else counts.notIntegrated += 1;
+                });
+                if (organizer) {
+                    const chip = (label, color, count, mode, selected) => `
+                        <div class="organizer-chip" role="button" onclick="toggleAndamentoFilter('${mode}')" style="cursor:pointer; ${selected ? 'box-shadow: 0 0 0 2px rgba(26,115,232,0.35);' : ''}">
+                            <span class="organizer-dot" style="background:${color}"></span>
+                            <span class="organizer-label">${label}</span>
+                            <span class="organizer-count">${count}</span>
+                        </div>
+                    `;
+                    organizer.innerHTML =
+                        chip('Com Integração', '#1a73e8', counts.integrated, 'integrated', andamentoFilter === 'integrated') +
+                        chip('Sem Integração', '#9aa0a6', counts.notIntegrated, 'not_integrated', andamentoFilter === 'not_integrated');
                 }
             }
             if (countEl) countEl.textContent = tickets.length;

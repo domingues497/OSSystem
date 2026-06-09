@@ -302,6 +302,7 @@ class DashboardService:
                 "data_cad": r.get("data_cad", 0),
                 "hora_cad": r.get("hora_cad", 0),
                 "tipo": item_tipo,
+                "trello_integrado": bool(r.get("trello_integrado")),
                 "no_iteration": bool(r["no_iteration"]) if col_name == "aberta" else False,
                 "waiting_auth": bool(r["waiting_auth"]),
                 "auth_approved": bool(r["auth_approved"]),

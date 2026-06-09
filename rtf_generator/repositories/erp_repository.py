@@ -1111,6 +1111,7 @@ class ERPRepository:
                 DM1744.DATA_CAD,
                 DM1744.HORA_CAD,
                 DS0300.NOME_USUARIO AS SOLICITANTE,
+                (NULLIF(TRIM(DM1744.ID_CARTAO_TRELLO), '') IS NOT NULL) AS TRELLO_INTEGRADO,
                 NOT EXISTS (
                     SELECT 1
                     FROM BANCO01.DM1745 I
@@ -1414,6 +1415,7 @@ class ERPRepository:
                     DATA_CAD,
                     HORA_CAD,
                     SOLICITANTE,
+                    TRELLO_INTEGRADO,
                     NO_ITERATION,
                     WAITING_AUTH,
                     AUTH_APPROVED,
@@ -1440,11 +1442,12 @@ class ERPRepository:
                 "data_cad": int(r[3] or 0),
                 "hora_cad": int(r[4] or 0),
                 "solicitante": r[5],
-                "no_iteration": bool(r[6]),
-                "waiting_auth": bool(r[7]),
-                "auth_approved": bool(r[8]),
-                "auth_req_count": int(r[9] or 0),
-                "auth_appr_count": int(r[10] or 0),
+                "trello_integrado": bool(r[6]),
+                "no_iteration": bool(r[7]),
+                "waiting_auth": bool(r[8]),
+                "auth_approved": bool(r[9]),
+                "auth_req_count": int(r[10] or 0),
+                "auth_appr_count": int(r[11] or 0),
             }
             for r in rows
         ]
