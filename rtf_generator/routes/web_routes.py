@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, send_file, redirect, url_for
+from flask import Blueprint, render_template, request, send_file, redirect, url_for, Response
 from werkzeug.utils import secure_filename
 import os
 import re
@@ -59,3 +59,7 @@ def produtividade_page():
 @web_bp.route('/chamados')
 def chamados_page():
     return render_template('chamados.html')
+
+@web_bp.route('/favicon.ico')
+def favicon():
+    return Response(status=204)

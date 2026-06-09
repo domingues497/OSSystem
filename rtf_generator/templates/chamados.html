@@ -62,26 +62,9 @@
                     <option value="">Todos</option>
                 </select>
             </div>
-            <div class="filter-group filter-group-tecnico">
-                <label class="filter-label">Últ. Atend.:</label>
-                <select id="filter-aprovador" class="filter-input filter-select-tecnico" onchange="carregarKanban();">
-                    <option value="">Todos</option>
-                </select>
-            </div>
             <div class="filter-group filter-group-conteudo">
                 <label class="filter-label">Conteúdo:</label>
                 <input type="text" id="filter-conteudo" class="filter-input filter-input-conteudo" placeholder="Texto...">
-            </div>
-
-            <div class="filter-group">
-                <label class="filter-label">Etapa:</label>
-                <select id="filter-etapa-visible" class="filter-input" onchange="carregarKanban();">
-                    <option value="">Qualquer</option>
-                    <option value="aprovado">Aprovado</option>
-                    <option value="finalizado">Finalizado</option>
-                    <option value="encerrado">Encerrado</option>
-                    <option value="comentou">Comentou</option>
-                </select>
             </div>
             <input type="hidden" id="filter-executor">
             <input type="hidden" id="filter-etapa">
@@ -98,29 +81,18 @@
                 <label class="filter-label">Assunto:</label>
                 <div class="filter-assunto-row">
                     <input type="text" id="filter-assunto-q" class="filter-input filter-input-assunto-busca" placeholder="Buscar....">
-                    <div class="filter-assunto-select-wrap">
-                        <label for="filter-assunto" class="filter-label filter-label-secondary">Assunto / Setor</label>
+                </div>
+            </div>
+            <div class="filter-assunto-select-wrap">
+                        <label class="filter-label">Assunto / Setor</label>
                         <select id="filter-assunto" class="filter-input filter-select-assunto" onchange="carregarAtivos(); carregarKanban();">
                             <option value="">Todos</option>
                         </select>
                     </div>
-                </div>
-            </div>
-            <div class="filter-group filter-group-ativo">
-                <label class="filter-label">Ativo:</label>
-                <select id="filter-ativo" class="filter-input filter-select-ativo" onchange="carregarKanban();">
-                    <option value="">Todos</option>
-                </select>
-            </div>
-            <div class="filter-group filter-actions">
-                <button type="button" class="btn btn-filter" onclick="carregarKanban();" title="Filtrar" style="padding: 8px 10px; font-size: 0; width: 40px; justify-content: center;">
-                    <i class="fas fa-filter" style="font-size: 0.9rem;"></i>
-                </button>
+
+             <div class="filter-group filter-actions">
                 <button type="button" class="btn btn-filter btn-secondary" onclick="limparFiltros()" title="Limpar" style="padding: 8px 10px; font-size: 0; width: 40px; justify-content: center;">
                     <i class="fas fa-eraser" style="font-size: 0.9rem;"></i>
-                </button>
-                <button type="button" class="btn btn-filter" id="btn-only-approved" onclick="toggleOnlyApproved()" title="Aprovados" style="padding: 8px 10px; font-size: 0; width: 40px; justify-content: center; background: #1e8e3e; color: white; border: none;">
-                    <i class="fas fa-check" style="font-size: 0.9rem;"></i>
                 </button>
             </div>
         </div>
@@ -689,8 +661,10 @@
             const fEtapa = (etapaVisible ? etapaVisible.value : (etapaHidden ? etapaHidden.value : '')) || '';
             if (execHidden) execHidden.value = fExecutor;
             if (etapaHidden) etapaHidden.value = fEtapa;
-            const fAtivo = document.getElementById('filter-ativo').value;
-            const fAtendente = document.getElementById('filter-aprovador').value;
+            const ativoEl = document.getElementById('filter-ativo');
+            const fAtivo = ativoEl ? ativoEl.value : '';
+            const atendenteEl = document.getElementById('filter-aprovador');
+            const fAtendente = atendenteEl ? atendenteEl.value : '';
             const urlParams = new URLSearchParams(window.location.search);
             const kpi = urlParams.get('kpi');
             const status = urlParams.get('status');
@@ -1212,6 +1186,7 @@
             const tipo = document.getElementById('filter-tipo').value;
             const assunto = document.getElementById('filter-assunto').value;
             const select = document.getElementById('filter-ativo');
+            if (!select) return;
             const currentValue = select.value;
             
             try {
@@ -1250,6 +1225,7 @@
                 const tecnicos = await res.json();
                 tecnicosFiltroCache = Array.isArray(tecnicos) ? tecnicos : [];
                 const select = document.getElementById('filter-aprovador');
+                if (!select) return;
                 const currentValue = select.value;
 
                 select.innerHTML = '<option value="">Todos</option>';
@@ -1298,7 +1274,10 @@
             }
             if (tipoParam) document.getElementById('filter-tipo').value = tipoParam;
             if (assuntoParam) document.getElementById('filter-assunto').value = assuntoParam;
-            if (ativoParam) document.getElementById('filter-ativo').value = ativoParam;
+            if (ativoParam) {
+                const ativoEl = document.getElementById('filter-ativo');
+                if (ativoEl) ativoEl.value = ativoParam;
+            }
             if (qParam) document.getElementById('filter-conteudo').value = qParam;
             if (execParam) {
                 if (String(execParam).includes(',')) {
@@ -1323,7 +1302,10 @@
             await carregarTecnicosFiltro();
 
             // Set approver after loading options
-            if (atendenteParam) document.getElementById('filter-aprovador').value = atendenteParam;
+            if (atendenteParam) {
+                const atendenteEl = document.getElementById('filter-aprovador');
+                if (atendenteEl) atendenteEl.value = atendenteParam;
+            }
             
             applyInitialSettings();
             setupEnterToFilter();
