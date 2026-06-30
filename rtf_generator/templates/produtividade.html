@@ -24,12 +24,18 @@
                 </div>
             </div>
 
-            <div class="filter-bar" style="margin: 0; padding: 5px 12px; background: #f8faff; border-radius: 10px; border: 1px solid #e1e8f5; display: flex; align-items: center; gap: 10px;">
-                <div class="date-group" style="display: flex; align-items: center; gap: 5px;">
-                    <input type="date" id="start-date">
-                    <span style="font-size: 0.8rem; color: #999;">-</span>
-                    <input type="date" id="end-date">
-                    <button onclick="carregarProdutividade()" class="btn btn-filter" style="background: #1a73e8; color: white; border: none;">OK</button>
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end;">
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; background: #fff; border: 1px solid #dbe5f4; border-radius: 10px;">
+                    <span style="font-size: 0.85rem; font-weight: 700; color: #1f2937;">{{ current_user.display_name if current_user else '' }}</span>
+                    <a href="/logout" style="text-decoration: none; font-size: 0.8rem; color: #c62828; font-weight: 700;">Sair</a>
+                </div>
+                <div class="filter-bar" style="margin: 0; padding: 5px 12px; background: #f8faff; border-radius: 10px; border: 1px solid #e1e8f5; display: flex; align-items: center; gap: 10px;">
+                    <div class="date-group" style="display: flex; align-items: center; gap: 5px;">
+                        <input type="date" id="start-date">
+                        <span style="font-size: 0.8rem; color: #999;">-</span>
+                        <input type="date" id="end-date">
+                        <button onclick="carregarProdutividade()" class="btn btn-filter" style="background: #1a73e8; color: white; border: none;">OK</button>
+                    </div>
                 </div>
             </div>
         </div>

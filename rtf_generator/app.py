@@ -17,6 +17,8 @@ from routes.notify_routes import notify_bp, run_access_report_job
 from routes.web_routes import web_bp
 from database.local_connection import init_local_db
 from repositories.local_access_repository import LocalAccessRepository
+from repositories.local_auth_repository import LocalAuthRepository
+from utils.auth_utils import is_logged_in, unauthorized_response
 
 _access_report_scheduler_started = False
 
@@ -92,6 +94,8 @@ def _start_access_report_scheduler(app):
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
+    app.secret_key = app.config["SECRET_KEY"]
+    app.permanent_session_lifetime = timedelta(hours=12)
 
     # Configurar logging
     logging.basicConfig(level=logging.INFO)
@@ -105,6 +109,8 @@ def create_app():
     if app.config.get('INIT_LOCAL_DB_ON_START'):
         init_local_db(app.config['LOCAL_DB'])
     access_repo = LocalAccessRepository(app.config['LOCAL_DB'])
+    auth_repo = LocalAuthRepository(app.config['LOCAL_DB'])
+    app.extensions["local_auth_repo"] = auth_repo
 
     @app.before_request
     def _track_access():
@@ -125,6 +131,22 @@ def create_app():
         except Exception as e:
             app.logger.error(f"Erro ao gravar access.log: {e}")
             return
+
+    @app.before_request
+    def _require_auth():
+        p = request.path or ""
+        if p.startswith("/static/") or p in {"/favicon.ico", "/login"}:
+            return
+        if p.startswith("/api/notify"):
+            return
+
+        protected_web = p in {"/", "/chamados", "/produtividade"} or p.startswith("/edit/") or p.startswith("/generate/") or p == "/upload"
+        protected_api = p.startswith("/api/erp") or p.startswith("/api/local")
+        if not protected_web and not protected_api:
+            return
+        if is_logged_in():
+            return
+        return unauthorized_response()
 
     # Registrar Blueprints
     app.register_blueprint(web_bp)

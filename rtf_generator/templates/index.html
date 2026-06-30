@@ -17,13 +17,21 @@
                     <a href="/chamados" class="btn-icon" title="Filtrar Chamados" style="background: #1a73e8; color: white; border: none; width: 32px; height: 32px; border-radius: 6px; cursor: pointer;">
                         <i class="fas fa-search"></i>
                     </a>
+                    {% if access_scope and access_scope.is_admin %}
+                    <a href="/usuarios" class="btn-icon" title="Usuarios" style="background: #34a853; color: white; border: none; width: 32px; height: 32px; border-radius: 6px; cursor: pointer;">
+                        <i class="fas fa-users"></i>
+                    </a>
+                    {% endif %}
                     <button id="btn-print" class="btn-icon" title="Imprimir" onclick="handlePrintClick(event)" style="background: #5f6368; color: white; border: none; width: 32px; height: 32px; border-radius: 6px; cursor: pointer;">
                         <i class="fas fa-print"></i>
                     </button>
                 </div>
             </div>
 
-            <div id="dashboard-filters" class="filter-bar" style="margin: 0; padding: 5px 12px; background: #f8faff; border-radius: 10px; border: 1px solid #e1e8f5; display: flex; align-items: center; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end;">
+
+
+                <div id="dashboard-filters" class="filter-bar" style="margin: 0; padding: 5px 12px; background: #f8faff; border-radius: 10px; border: 1px solid #e1e8f5; display: flex; align-items: center; gap: 10px;">
                 <div class="refresh-group" style="border-right: 1px solid #ddd; padding-right: 10px; margin-right: 5px; display: flex; align-items: center; gap: 5px;">
                     <button id="toggle-sound" onclick="toggleSound()" class="btn-icon" title="Ativar/Desativar Som" style="width: 28px; height: 28px; border: 1px solid #ddd; border-radius: 4px;">
                         <i class="fas fa-volume-up"></i>
@@ -49,6 +57,15 @@
                     <span style="font-size: 0.8rem; color: #999;">-</span>
                     <input type="date" id="dash-end-date" style="border: 1px solid #ddd; border-radius: 4px; padding: 3px 6px; font-size: 0.8rem; color: #444;">
                     <button onclick="carregarDashboard()" class="btn btn-filter" style="padding: 4px 12px; font-size: 0.8rem; background: #1a73e8; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">OK</button>
+                </div>
+            </div>
+                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; background: #fff; border: 1px solid #dbe5f4; border-radius: 10px;">
+                    <span style="font-size: 0.85rem; font-weight: 700; color: #1f2937;">{{ current_user.display_name if current_user else '' }}</span>
+                    {% if access_scope and access_scope.is_admin %}
+                    <span style="font-size: 0.75rem; background: #e8f0fe; color: #1a73e8; padding: 3px 8px; border-radius: 999px; font-weight: 700;">Administrador</span>
+                    {% else %}
+                    {% endif %}
+                    <a href="/logout" style="text-decoration: none; font-size: 0.8rem; color: #c62828; font-weight: 700;">Sair</a>
                 </div>
             </div>
         </div>
@@ -102,6 +119,13 @@
                 </h3>
                 <div id="pending-grid" class="pending-grid">
                     <!-- Cards via JS -->
+                </div>
+                <div id="pending-pagination" style="display:none; margin-top: 12px; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+                    <div id="pending-page-info" style="font-size: 0.85rem; color: #5f6368;"></div>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <button id="pending-prev-btn" type="button" onclick="changePendingPage(-1)" style="padding: 6px 12px; border-radius: 6px; border: 1px solid #d0d7e2; background: #fff; color: #374151; cursor: pointer; font-weight: 600;">Anterior</button>
+                        <button id="pending-next-btn" type="button" onclick="changePendingPage(1)" style="padding: 6px 12px; border-radius: 6px; border: 1px solid #d0d7e2; background: #fff; color: #374151; cursor: pointer; font-weight: 600;">Próxima</button>
+                    </div>
                 </div>
             </div>
 
@@ -189,6 +213,8 @@
         let avgTimeChart = null;
         let refreshTimer = null;
         let pendingTickets = [];
+        const pendingPageSize = 12;
+        let pendingCurrentPage = 1;
         let lastOpenCount = null;
         let tvModeEnabled = localStorage.getItem('tv-mode-enabled') === 'true';
         let wakeLock = null;
@@ -491,7 +517,7 @@
         async function carregarPendentes() {
             const res = await fetch('/api/erp/chamados_pendentes');
             pendingTickets = await res.json();
-            renderGrid('pending-section', 'pending-grid', pendingTickets, true);
+            renderPendingGrid();
         }
 
         async function carregarTrelloSemRotulo() {
@@ -503,6 +529,50 @@
                 const section = document.getElementById('trello-missing-section');
                 if (section) section.style.display = 'none';
             }
+        }
+
+        function renderPendingGrid() {
+            const totalPages = Math.max(1, Math.ceil(pendingTickets.length / pendingPageSize));
+            pendingCurrentPage = Math.min(Math.max(1, pendingCurrentPage), totalPages);
+            const startIndex = (pendingCurrentPage - 1) * pendingPageSize;
+            const endIndex = startIndex + pendingPageSize;
+            const pageTickets = pendingTickets.slice(startIndex, endIndex);
+
+            renderGrid('pending-section', 'pending-grid', pageTickets, true);
+            updatePendingPagination(totalPages, startIndex, endIndex);
+        }
+
+        function updatePendingPagination(totalPages, startIndex, endIndex) {
+            const section = document.getElementById('pending-section');
+            const pagination = document.getElementById('pending-pagination');
+            const info = document.getElementById('pending-page-info');
+            const prevBtn = document.getElementById('pending-prev-btn');
+            const nextBtn = document.getElementById('pending-next-btn');
+
+            if (!section || !pagination || !info || !prevBtn || !nextBtn) return;
+            if (pendingTickets.length === 0 || section.style.display === 'none') {
+                pagination.style.display = 'none';
+                return;
+            }
+
+            const first = pendingTickets.length ? startIndex + 1 : 0;
+            const last = Math.min(endIndex, pendingTickets.length);
+            info.textContent = `Mostrando ${first}-${last} de ${pendingTickets.length} chamados pendentes | Página ${pendingCurrentPage} de ${totalPages}`;
+            prevBtn.disabled = pendingCurrentPage <= 1;
+            nextBtn.disabled = pendingCurrentPage >= totalPages;
+            prevBtn.style.opacity = prevBtn.disabled ? '0.5' : '1';
+            nextBtn.style.opacity = nextBtn.disabled ? '0.5' : '1';
+            prevBtn.style.cursor = prevBtn.disabled ? 'not-allowed' : 'pointer';
+            nextBtn.style.cursor = nextBtn.disabled ? 'not-allowed' : 'pointer';
+            pagination.style.display = totalPages > 1 ? 'flex' : 'none';
+        }
+
+        function changePendingPage(delta) {
+            const totalPages = Math.max(1, Math.ceil(pendingTickets.length / pendingPageSize));
+            const nextPage = pendingCurrentPage + delta;
+            if (nextPage < 1 || nextPage > totalPages) return;
+            pendingCurrentPage = nextPage;
+            renderPendingGrid();
         }
 
         function renderGrid(sectionId, gridId, tickets, withSLA = false, badge = '') {
@@ -523,6 +593,28 @@
                         <div class="pending-meta">👤 ${t.solicitante}<br>📅 ${t.data_cad_iso} ${t.hora_cad_fmt}</div>
                     </div>`;
             }).join('');
+        }
+
+        function formatSlaDuration(diffMs) {
+            const overdue = diffMs < 0;
+            const absMs = Math.abs(diffMs);
+            const totalSeconds = Math.floor(absMs / 1000);
+            const days = Math.floor(totalSeconds / 86400);
+            const remainderAfterDays = totalSeconds % 86400;
+            const hours = Math.floor(remainderAfterDays / 3600);
+            const minutes = Math.floor((remainderAfterDays % 3600) / 60);
+            const seconds = remainderAfterDays % 60;
+            const sign = overdue ? '-' : '';
+
+            if (days > 0) {
+                return `${sign}${days}d ${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            }
+
+            if (hours > 0) {
+                return `${sign}${hours}h ${minutes}m ${seconds}s`;
+            }
+
+            return `${sign}${minutes}m ${seconds}s`;
         }
 
         async function openDetails(id) {
@@ -655,9 +747,7 @@
 
             let diff = (deadline ? deadline.getTime() : now.getTime()) - now.getTime();
             let overdue = diff < 0;
-            let abs = Math.abs(diff);
-            let h = Math.floor(abs/3600000), m = Math.floor((abs%3600000)/60000), s = Math.floor((abs%60000)/1000);
-            return { timerText: `${overdue?'-':''}${h>0?h+'h ':''}${m}m ${s}s`, isOverdue: overdue };
+            return { timerText: formatSlaDuration(diff), isOverdue: overdue };
         }
 
         setInterval(() => {

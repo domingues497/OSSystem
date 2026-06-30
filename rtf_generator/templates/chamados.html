@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/chamados.css') }}">
 </head>
 <body>
+    {% set can_manage_filters = access_scope.can_manage_filters if access_scope else false %}
     <div class="container">
         <div class="dashboard-header" style="margin-bottom: 1.5rem; border-bottom: 1px solid #eee; padding-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
             <div style="display: flex; align-items: center; gap: 15px;">
@@ -16,34 +17,52 @@
                     <a href="/" class="btn-icon" title="Dashboard" style="background: #1a73e8; color: white; border: none; width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; text-decoration: none;">
                         <i class="fas fa-chart-line"></i>
                     </a>
+                    {% if access_scope and access_scope.is_admin %}
+                    <a href="/usuarios" class="btn-icon" title="Usuarios" style="background: #34a853; color: white; border: none; width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; text-decoration: none;">
+                        <i class="fas fa-users"></i>
+                    </a>
+                    {% endif %}
                 </div>
             </div>
 
-            <div class="filter-bar" style="margin: 0; padding: 5px 12px; background: #f8faff; border-radius: 10px; border: 1px solid #e1e8f5; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                <div class="refresh-group" style="border-right: 1px solid #ddd; padding-right: 10px; margin-right: 5px; display: flex; align-items: center; gap: 5px;">
-                    <i class="fas fa-sync-alt" style="font-size: 0.8rem; color: #666;" title="Atualização Automática"></i>
-                    <select id="refresh-interval" onchange="setupAutoRefresh()" style="border: none; background: transparent; font-size: 0.8rem; font-weight: 600; color: #444; cursor: pointer;">
-                        <option value="0">Off</option>
-                        <option value="30">30s</option>
-                        <option value="60" selected>1m</option>
-                        <option value="300">5m</option>
-                        <option value="600">10m</option>
-                    </select>
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end;">
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; background: #fff; border: 1px solid #dbe5f4; border-radius: 10px;">
+                    <span style="font-size: 0.85rem; font-weight: 700; color: #1f2937;">{{ current_user.display_name if current_user else '' }}</span>
+                    {% if access_scope and access_scope.is_admin %}
+                    <span style="font-size: 0.75rem; background: #e8f0fe; color: #1a73e8; padding: 3px 8px; border-radius: 999px; font-weight: 700;">Administrador</span>
+                    {% else %}
+                    <span style="font-size: 0.75rem; background: #eef6ec; color: #2e7d32; padding: 3px 8px; border-radius: 999px; font-weight: 700;">
+                        {{ (access_scope.subject_names | join(', ')) if access_scope and access_scope.subject_names else 'Assuntos' }}
+                    </span>
+                    {% endif %}
+                    <a href="/logout" style="text-decoration: none; font-size: 0.8rem; color: #c62828; font-weight: 700;">Sair</a>
                 </div>
-                <div style="display: flex; align-items: center; gap: 5px;">
-                    <input type="date" id="filter-start-date" style="width: 11ch; border: 1px solid #ddd; border-radius: 4px; padding: 3px 6px; font-size: 0.8rem; color: #444; height: 40px; box-sizing: border-box;">
-                    <span style="font-size: 0.8rem; color: #999;">-</span>
-                    <input type="date" id="filter-end-date" style="width: 11ch; border: 1px solid #ddd; border-radius: 4px; padding: 3px 6px; font-size: 0.8rem; color: #444; height: 40px; box-sizing: border-box;">
-                    <button type="button" onclick="carregarKanban();" style="padding: 4px 12px; font-size: 0.8rem; background: #1a73e8; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; height: 40px;">
-                        OK
+                <div class="filter-bar" style="margin: 0; padding: 5px 12px; background: #f8faff; border-radius: 10px; border: 1px solid #e1e8f5; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <div class="refresh-group" style="border-right: 1px solid #ddd; padding-right: 10px; margin-right: 5px; display: flex; align-items: center; gap: 5px;">
+                        <i class="fas fa-sync-alt" style="font-size: 0.8rem; color: #666;" title="Atualização Automática"></i>
+                        <select id="refresh-interval" onchange="setupAutoRefresh()" style="border: none; background: transparent; font-size: 0.8rem; font-weight: 600; color: #444; cursor: pointer;">
+                            <option value="0">Off</option>
+                            <option value="30">30s</option>
+                            <option value="60" selected>1m</option>
+                            <option value="300">5m</option>
+                            <option value="600">10m</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 5px;">
+                        <input type="date" id="filter-start-date" style="width: 11ch; border: 1px solid #ddd; border-radius: 4px; padding: 3px 6px; font-size: 0.8rem; color: #444; height: 40px; box-sizing: border-box;">
+                        <span style="font-size: 0.8rem; color: #999;">-</span>
+                        <input type="date" id="filter-end-date" style="width: 11ch; border: 1px solid #ddd; border-radius: 4px; padding: 3px 6px; font-size: 0.8rem; color: #444; height: 40px; box-sizing: border-box;">
+                        <button type="button" onclick="carregarKanban();" style="padding: 4px 12px; font-size: 0.8rem; background: #1a73e8; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; height: 40px;">
+                            OK
+                        </button>
+                    </div>
+                    <button id="toggle-tv-mode" type="button" class="btn" onclick="toggleTvMode()" style="padding: 4px 10px; font-size: 0.8rem; background: #f1f3f4; color: #444; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; font-weight: 600;">
+                        <i class="fas fa-tv"></i> TV
+                    </button>
+                    <button type="button" class="btn" onclick="carregarKanban()" style="padding: 4px 12px; font-size: 0.8rem; background: #5f6368; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">
+                        <i class="fas fa-sync-alt"></i> Kanban
                     </button>
                 </div>
-                <button id="toggle-tv-mode" type="button" class="btn" onclick="toggleTvMode()" style="padding: 4px 10px; font-size: 0.8rem; background: #f1f3f4; color: #444; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; font-weight: 600;">
-                    <i class="fas fa-tv"></i> TV
-                </button>
-                <button type="button" class="btn" onclick="carregarKanban()" style="padding: 4px 12px; font-size: 0.8rem; background: #5f6368; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">
-                    <i class="fas fa-sync-alt"></i> Kanban
-                </button>
             </div>
         </div>
 
@@ -52,6 +71,7 @@
                 <label class="filter-label">Chamado</label>
                 <input type="text" id="filter-id" class="filter-input filter-input-id" placeholder="Ex: 81340" maxlength="6">
             </div>
+            {% if can_manage_filters %}
             <div class="filter-group filter-group-solicitante">
                 <label class="filter-label">Solicitante</label>
                 <input type="text" id="filter-solicitante" class="filter-input filter-input-solicitante" placeholder="Nome...">
@@ -62,6 +82,10 @@
                     <option value="">Todos</option>
                 </select>
             </div>
+            {% else %}
+            <input type="hidden" id="filter-solicitante">
+            <input type="hidden" id="filter-executor-visible">
+            {% endif %}
             <div class="filter-group filter-group-conteudo">
                 <label class="filter-label">Conteúdo:</label>
                 <input type="text" id="filter-conteudo" class="filter-input filter-input-conteudo" placeholder="Texto...">
@@ -102,6 +126,7 @@
             <span>Atualizando...</span>
         </div>
 
+        {% if can_manage_filters %}
         <div id="advanced-filter-overlay" style="display:none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 9999; align-items: center; justify-content: center;">
             <div style="background: #fff; border-radius: 10px; padding: 16px; width: 360px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
                 <div style="display:flex; align-items:center; justify-content: space-between; margin-bottom: 10px;">
@@ -137,6 +162,7 @@
                 </div>
             </div>
         </div>
+        {% endif %}
 
         <!-- Visualização em Quadro Kanban -->
         <div class="kanban-section" style="margin-top: 2rem;">
@@ -225,6 +251,7 @@
     </div>
 
     <script>
+        const ACCESS_SCOPE = {{ access_scope | tojson }};
         let selectedStatuses = [];
         let refreshTimer = null;
         let hasLoadedKanban = false;
@@ -1310,7 +1337,9 @@
             applyInitialSettings();
             setupEnterToFilter();
             setupLiveFilters();
-            setupHiddenAdvancedFilterShortcut();
+            if (ACCESS_SCOPE && ACCESS_SCOPE.can_manage_filters) {
+                setupHiddenAdvancedFilterShortcut();
+            }
             document.addEventListener('keydown', handleModalKeyNavigation);
             carregarKanban();
         })();

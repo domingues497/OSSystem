@@ -77,7 +77,7 @@ class ProdutividadeService:
                 return self._normalize_spaces(m.group(1))
         return "---"
 
-    def obter_produtividade(self, start_date_str=None, end_date_str=None):
+    def obter_produtividade(self, start_date_str=None, end_date_str=None, access_scope=None):
         if start_date_str and end_date_str:
             start_dt = datetime.strptime(start_date_str, '%Y-%m-%d')
             end_dt = datetime.strptime(end_date_str, '%Y-%m-%d')
@@ -89,7 +89,7 @@ class ProdutividadeService:
         start_erp = int(start_dt.strftime('%Y%m%d'))
         end_erp = int(end_dt.strftime('%Y%m%d'))
 
-        eventos = self.erp_repo.buscar_produtividade_por_tecnico(start_erp, end_erp)
+        eventos = self.erp_repo.buscar_produtividade_por_tecnico(start_erp, end_erp, access_scope=access_scope)
 
         by_day = {}
         seen_unique_ticket = set()

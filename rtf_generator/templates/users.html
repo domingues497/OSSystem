@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Usuarios - OSSystem</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f5f7fb;
+            color: #1f2937;
+        }
+        .page {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 1.6rem;
+            color: #1a73e8;
+        }
+        .header-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .btn-link {
+            text-decoration: none;
+            padding: 10px 14px;
+            border-radius: 10px;
+            border: 1px solid #dbe5f4;
+            background: #fff;
+            color: #1f2937;
+            font-weight: 700;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: minmax(320px, 420px) 1fr;
+            gap: 20px;
+        }
+        .card {
+            background: #fff;
+            border: 1px solid #dbe5f4;
+            border-radius: 16px;
+            box-shadow: 0 12px 30px rgba(26, 115, 232, 0.08);
+            padding: 20px;
+        }
+        .card h2 {
+            margin: 0 0 16px;
+            font-size: 1.1rem;
+            color: #1f2937;
+        }
+        .field {
+            margin-bottom: 14px;
+        }
+        .field label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #374151;
+        }
+        .field input,
+        .field select {
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid #d0d7e2;
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 0.95rem;
+            outline: none;
+            background: #fff;
+        }
+        .field input:focus,
+        .field select:focus {
+            border-color: #1a73e8;
+            box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
+        }
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+        .subjects-box {
+            border: 1px solid #dbe5f4;
+            border-radius: 12px;
+            padding: 12px;
+            background: #fbfdff;
+            max-height: 260px;
+            overflow: auto;
+        }
+        .subject-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+            border-bottom: 1px solid #edf2fa;
+        }
+        .subject-item:last-child {
+            border-bottom: none;
+        }
+        .actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+        .btn-primary {
+            border: none;
+            border-radius: 10px;
+            padding: 10px 14px;
+            background: #1a73e8;
+            color: #fff;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .btn-secondary {
+            border: 1px solid #d0d7e2;
+            border-radius: 10px;
+            padding: 10px 14px;
+            background: #fff;
+            color: #374151;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .message {
+            margin-bottom: 16px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+        }
+        .message.error {
+            background: #fff1f2;
+            border: 1px solid #f5c2c7;
+            color: #b42318;
+        }
+        .message.success {
+            background: #eefbf1;
+            border: 1px solid #b7e4c7;
+            color: #1b6e37;
+        }
+        .users-list {
+            display: grid;
+            gap: 16px;
+        }
+        .user-card {
+            border: 1px solid #e4e9f2;
+            border-radius: 14px;
+            padding: 16px;
+            background: #fcfdff;
+        }
+        .user-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+        }
+        .user-title {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+        .chip.admin {
+            background: #e8f0fe;
+            color: #1a73e8;
+        }
+        .chip.subject {
+            background: #eef6ec;
+            color: #2e7d32;
+        }
+        .chip.inactive {
+            background: #f5f5f5;
+            color: #616161;
+        }
+        .user-meta {
+            font-size: 0.82rem;
+            color: #6b7280;
+        }
+        .hint {
+            font-size: 0.82rem;
+            color: #6b7280;
+            line-height: 1.45;
+            margin-top: 8px;
+        }
+        @media (max-width: 960px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="header">
+            <div>
+                <h1>Usuarios e Assuntos</h1>
+                <div class="user-meta">Administrador: {{ current_user.display_name if current_user else '' }}</div>
+            </div>
+            <div class="header-actions">
+                <a href="/" class="btn-link">Dashboard</a>
+                <a href="/chamados" class="btn-link">Chamados</a>
+                <a href="/logout" class="btn-link">Sair</a>
+            </div>
+        </div>
+
+        {% if error %}
+        <div class="message error">{{ error }}</div>
+        {% endif %}
+        {% if success %}
+        <div class="message success">{{ success }}</div>
+        {% endif %}
+
+        <div class="grid">
+            <div class="card">
+                <h2>Novo Usuario</h2>
+                <form method="post" action="{{ url_for('web.manage_users') }}">
+                    <input type="hidden" name="action" value="create_user">
+                    <div class="field">
+                        <label for="display_name">Nome</label>
+                        <input id="display_name" name="display_name" type="text" required>
+                    </div>
+                    <div class="field">
+                        <label for="username">Usuario</label>
+                        <input id="username" name="username" type="text" autocomplete="username" required>
+                    </div>
+                    <div class="field">
+                        <label for="password">Senha</label>
+                        <input id="password" name="password" type="password" autocomplete="new-password" required>
+                    </div>
+                    <div class="field">
+                        <label for="confirm_password">Confirmar senha</label>
+                        <input id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" required>
+                    </div>
+                    <div class="field">
+                        <label for="profile">Perfil</label>
+                        <select id="profile" name="profile" onchange="toggleSubjectBox(this, 'create-subjects-box')">
+                            <option value="subject">Usuario por assunto</option>
+                            <option value="admin">Administrador</option>
+                        </select>
+                    </div>
+                    <div class="checkbox-row">
+                        <input id="is_active" name="is_active" type="checkbox" value="1" checked>
+                        <label for="is_active" style="margin: 0;">Usuario ativo</label>
+                    </div>
+                    <div id="create-subjects-box">
+                        <label style="display:block; margin-bottom: 8px; font-size: 0.85rem; font-weight: 700; color: #374151;">Assuntos permitidos</label>
+                        <div class="subjects-box">
+                            {% for subject in available_subjects %}
+                            <label class="subject-item">
+                                <input type="checkbox" name="subject_codes" value="{{ subject.cod_assunto }}">
+                                <span>{{ subject.cod_assunto }} - {{ subject.descr_assunto }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="actions">
+                        <button type="submit" class="btn-primary">Cadastrar usuario</button>
+                    </div>
+                    <div class="hint">
+                        Para perfis comuns, selecione um ou mais assuntos. Exemplo: T.I = 3, 4, 19.
+                    </div>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>Usuarios Cadastrados</h2>
+                <div class="users-list">
+                    {% for user in managed_users %}
+                    <div class="user-card">
+                        <div class="user-card-header">
+                            <div class="user-title">
+                                <strong>{{ user.display_name }}</strong>
+                                <span class="user-meta">@{{ user.username }}</span>
+                            </div>
+                            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                <span class="chip {{ 'admin' if user.profile == 'admin' else 'subject' }}">
+                                    {{ 'Administrador' if user.profile == 'admin' else 'Por Assunto' }}
+                                </span>
+                                {% if not user.is_active %}
+                                <span class="chip inactive">Inativo</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <form method="post" action="{{ url_for('web.manage_users') }}">
+                            <input type="hidden" name="action" value="update_user">
+                            <input type="hidden" name="user_id" value="{{ user.id }}">
+                            <div class="field">
+                                <label>Nome</label>
+                                <input name="display_name" type="text" value="{{ user.display_name }}" required>
+                            </div>
+                            <div class="field">
+                                <label>Perfil</label>
+                                <select name="profile" onchange="toggleSubjectBox(this, 'subjects-box-{{ user.id }}')">
+                                    <option value="subject" {% if user.profile != 'admin' %}selected{% endif %}>Usuario por assunto</option>
+                                    <option value="admin" {% if user.profile == 'admin' %}selected{% endif %}>Administrador</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label>Nova senha</label>
+                                <input name="password" type="password" placeholder="Deixe em branco para manter">
+                            </div>
+                            <div class="checkbox-row">
+                                <input id="active-{{ user.id }}" name="is_active" type="checkbox" value="1" {% if user.is_active %}checked{% endif %}>
+                                <label for="active-{{ user.id }}" style="margin: 0;">Usuario ativo</label>
+                            </div>
+                            <div id="subjects-box-{{ user.id }}" {% if user.profile == 'admin' %}style="display:none;"{% endif %}>
+                                <label style="display:block; margin-bottom: 8px; font-size: 0.85rem; font-weight: 700; color: #374151;">Assuntos permitidos</label>
+                                <div class="subjects-box">
+                                    {% set selected_codes = user.subjects | map(attribute='cod_assunto') | list %}
+                                    {% for subject in available_subjects %}
+                                    <label class="subject-item">
+                                        <input type="checkbox" name="subject_codes" value="{{ subject.cod_assunto }}" {% if subject.cod_assunto in selected_codes %}checked{% endif %}>
+                                        <span>{{ subject.cod_assunto }} - {{ subject.descr_assunto }}</span>
+                                    </label>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div class="actions">
+                                <button type="submit" class="btn-primary">Salvar</button>
+                            </div>
+                            <div class="hint">
+                                Ultimo login:
+                                {% if user.last_login_at %}
+                                {{ user.last_login_at }}
+                                {% else %}
+                                nunca acessou
+                                {% endif %}
+                            </div>
+                        </form>
+                    </div>
+                    {% else %}
+                    <div class="hint">Nenhum usuario cadastrado.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleSubjectBox(selectEl, boxId) {
+            const box = document.getElementById(boxId);
+            if (!box) return;
+            box.style.display = selectEl.value === 'admin' ? 'none' : '';
+        }
+    </script>
+</body>
+</html>

@@ -18,28 +18,88 @@ class ERPRepository:
             'BA': 'Encerrada',
             'RJ': 'Rejeitada'
         }
+        raw_default = os.getenv("DEFAULT_SUBJECT_CODES", "")
+        self.default_subject_codes = [
+            int(part.strip())
+            for part in raw_default.split(",")
+            if part.strip().isdigit()
+        ]
 
     def _get_text_col(self, cur):
         cur.execute("SELECT * FROM BANCO01.DM1745 LIMIT 1")
         all_cols = [col[0].lower() for col in cur.description]
         return next((c for c in all_cols if 'descr' in c or 'texto' in c or 'obs' in c), "DESCR_ACOMP")
 
-    def buscar_assuntos(self, tipo=None):
+    def _normalize_access_scope(self, access_scope=None):
+        if access_scope and access_scope.get("is_admin"):
+            return {"is_admin": True, "subject_codes": []}
+        codes = []
+        for raw in (access_scope or {}).get("subject_codes", self.default_subject_codes):
+            try:
+                code = int(raw)
+            except Exception:
+                continue
+            if code not in codes:
+                codes.append(code)
+        return {"is_admin": False, "subject_codes": codes}
+
+    def _build_in_clause(self, values):
+        return ", ".join(["%s"] * len(values))
+
+    def _scope_subject_condition(self, column_sql, access_scope=None):
+        scope = self._normalize_access_scope(access_scope)
+        if scope["is_admin"]:
+            return "1=1", []
+        codes = scope["subject_codes"]
+        if not codes:
+            return "1=0", []
+        return f"{column_sql} IN ({self._build_in_clause(codes)})", list(codes)
+
+    def _scope_assunto_condition(self, assunto_column_sql, access_scope=None):
+        return self._scope_subject_condition(assunto_column_sql, access_scope)
+
+    def _scope_ticket_conditions(self, alias, access_scope=None):
+        conditions = []
+        params = []
+        assunto_condition, assunto_params = self._scope_assunto_condition(f"{alias}.COD_ASSUNTO", access_scope)
+        if assunto_condition and assunto_condition != "1=1":
+            conditions.append(assunto_condition)
+            params.extend(assunto_params)
+        return conditions, params
+
+    def ticket_in_scope(self, cod_solicitacao, access_scope=None):
         conn = get_erp_connection()
         cur = conn.cursor()
+        query = "SELECT 1 FROM BANCO01.DM1744 WHERE COD_SOLICITACAO = %s"
+        params = [cod_solicitacao]
+        conditions, cond_params = self._scope_ticket_conditions("DM1744", access_scope)
+        for condition in conditions:
+            query += f" AND {condition}"
+        params.extend(cond_params)
+        cur.execute(query, params)
+        allowed = cur.fetchone() is not None
+        cur.close()
+        conn.close()
+        return allowed
+
+    def buscar_assuntos(self, tipo=None, access_scope=None):
+        conn = get_erp_connection()
+        cur = conn.cursor()
+        assunto_condition, assunto_params = self._scope_subject_condition("DM1744.COD_ASSUNTO", access_scope)
         
+        allowed_condition, allowed_params = self._scope_subject_condition("DC1739.COD_ASSUNTO", access_scope)
+
         # Se houver filtro de tipo, precisamos buscar os assuntos que pertencem a esse tipo
         # Como o tipo é classificado em Python, vamos buscar os chamados abertos e classificá-los
         if tipo:
-            cur.execute("""
+            cur.execute(f"""
                 SELECT DISTINCT DM1744.COD_ASSUNTO, DC1739.DESCR_ASSUNTO, DM1744.TITULO_SOLICITACAO
                 FROM BANCO01.DM1744
                 JOIN BANCO01.DC1739 ON (DC1739.COD_ASSUNTO = DM1744.COD_ASSUNTO)
-                JOIN BANCO01.DC1966 ON (DC1966.COD_ASSUNTO = DM1744.COD_ASSUNTO)
-                WHERE DC1966.COD_DEPAR = 16 
+                WHERE {assunto_condition}
                   AND DM1744.COD_STATUS_DOC NOT IN ('BA', 'RJ')
                   AND (DC1739.DATA_DESAT = 0 OR DC1739.DATA_DESAT IS NULL)
-            """)
+            """, assunto_params)
             rows = cur.fetchall()
             assuntos_set = set()
             assuntos_list = []
@@ -50,33 +110,32 @@ class ERPRepository:
                         assuntos_list.append({"code": cod, "name": descr})
             assuntos = sorted(assuntos_list, key=lambda x: x['name'])
         else:
-            cur.execute("""
-                SELECT DISTINCT DC1739.COD_ASSUNTO, DC1739.DESCR_ASSUNTO 
-                FROM BANCO01.DC1739 
-                JOIN BANCO01.DC1966 ON (DC1966.COD_ASSUNTO = DC1739.COD_ASSUNTO)
-                WHERE DC1966.COD_DEPAR = 16 
+            cur.execute(f"""
+                SELECT DISTINCT DC1739.COD_ASSUNTO, DC1739.DESCR_ASSUNTO
+                FROM BANCO01.DC1739
+                WHERE {allowed_condition}
                   AND (DC1739.DATA_DESAT = 0 OR DC1739.DATA_DESAT IS NULL)
                 ORDER BY DC1739.DESCR_ASSUNTO
-            """)
+            """, allowed_params)
             assuntos = [{"code": row[0], "name": row[1]} for row in cur.fetchall()]
             
         cur.close()
         conn.close()
         return assuntos
 
-    def buscar_ativos(self, tipo=None, assunto=None):
+    def buscar_ativos(self, tipo=None, assunto=None, access_scope=None):
         conn = get_erp_connection()
         cur = conn.cursor()
-        query = """
+        assunto_condition, assunto_params = self._scope_subject_condition("DM1744.COD_ASSUNTO", access_scope)
+        query = f"""
             SELECT DC1629.COD_ATIVO, DC1629.DESCR_ATIVO, DC1629.IDENT_ATIVO, DM1744.TITULO_SOLICITACAO, DM1744.COD_ASSUNTO
             FROM BANCO01.DC1629 
             JOIN BANCO01.DM1744 ON (DM1744.COD_ATIVO = DC1629.COD_ATIVO)
-            JOIN BANCO01.DC1966 ON (DC1966.COD_ASSUNTO = DM1744.COD_ASSUNTO)
             WHERE DM1744.COD_STATUS_DOC NOT IN ('BA', 'RJ')
-              AND DC1966.COD_DEPAR = 16
+              AND {assunto_condition}
               AND (DC1629.DATA_DESAT = 0 OR DC1629.DATA_DESAT IS NULL)
         """
-        params = []
+        params = list(assunto_params)
         if assunto:
             query += " AND DM1744.COD_ASSUNTO = %s"
             params.append(assunto)
@@ -103,19 +162,22 @@ class ERPRepository:
         conn.close()
         return ativos
 
-    def buscar_aprovadores(self):
+    def buscar_aprovadores(self, access_scope=None):
         conn = get_erp_connection()
         cur = conn.cursor()
         text_col = self._get_text_col(cur)
+        assunto_condition, assunto_params = self._scope_subject_condition("DM1744.COD_ASSUNTO", access_scope)
         
-        query_operadores = """
-            SELECT DISTINCT DS0300.NOME_USUARIO 
-            FROM public.DS0300 
-            JOIN BANCO01.DC1964 ON (DC1964.COD_USUARIO = DS0300.COD_USUARIO)
-            WHERE DC1964.COD_DEPAR = 16
+        query_operadores = f"""
+            SELECT DISTINCT DS0300.NOME_USUARIO
+            FROM BANCO01.DM1745
+            JOIN public.DS0300 ON (DS0300.COD_USUARIO = DM1745.COD_USUARIO)
+            JOIN BANCO01.DM1744 ON (DM1744.COD_SOLICITACAO = DM1745.COD_SOLICITACAO)
+            WHERE {assunto_condition}
+              AND DM1745.COD_USUARIO > 0
             ORDER BY DS0300.NOME_USUARIO
         """
-        cur.execute(query_operadores)
+        cur.execute(query_operadores, assunto_params)
         tecnicos_ti = {row[0].strip() for row in cur.fetchall()}
         
         query_aprovadores_hist = f"""
@@ -123,11 +185,10 @@ class ERPRepository:
             FROM BANCO01.DM1745 
             JOIN public.DS0300 ON (DS0300.COD_USUARIO = DM1745.COD_USUARIO)
             JOIN BANCO01.DM1744 ON (DM1744.COD_SOLICITACAO = DM1745.COD_SOLICITACAO)
-            JOIN BANCO01.DC1966 ON (DC1966.COD_ASSUNTO = DM1744.COD_ASSUNTO)
-            WHERE DC1966.COD_DEPAR = 16
+            WHERE {assunto_condition}
               AND (UPPER({text_col}) LIKE '%%AUTORIZAÇÃO%%' AND UPPER({text_col}) LIKE '%%APROVADA%%')
         """
-        cur.execute(query_aprovadores_hist)
+        cur.execute(query_aprovadores_hist, assunto_params)
         rows = cur.fetchall()
         
         aprovadores_finais = set(tecnicos_ti)
@@ -153,11 +214,11 @@ class ERPRepository:
         conn.close()
         return statuses
 
-    def buscar_chamado_por_id(self, cod_solicitacao):
+    def buscar_chamado_por_id(self, cod_solicitacao, access_scope=None):
         conn = get_erp_connection()
         cur = conn.cursor()
         text_col = self._get_text_col(cur)
-        cur.execute(f"""
+        query = f"""
             SELECT 
                 DM1744.PRIORIDADE, DM1744.COD_STATUS_DOC, DM1744.DATA_CAD, DM1744.HORA_CAD,
                 DM1744.DATA_INIC_ATEND, DM1744.HORA_INIC_ATEND, DM1744.DATA_BAIXA, DM1744.HORA_BAIXA,
@@ -191,7 +252,13 @@ class ERPRepository:
                 WHERE X.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
             ) AUTH ON TRUE
             WHERE DM1744.COD_SOLICITACAO = %s
-        """, (cod_solicitacao,))
+        """
+        params = [cod_solicitacao]
+        scope_condition, scope_params = self._scope_assunto_condition("DM1744.COD_ASSUNTO", access_scope)
+        if scope_condition:
+            query += f" AND {scope_condition}"
+            params.extend(scope_params)
+        cur.execute(query, params)
         row = cur.fetchone()
         if not row: return None
         columns = [col[0].lower() for col in cur.description]
@@ -221,10 +288,11 @@ class ERPRepository:
         conn.close()
         return name
 
-    def buscar_trello_sem_rotulo_base(self, limit=30):
+    def buscar_trello_sem_rotulo_base(self, limit=30, access_scope=None):
         conn = get_erp_connection()
         cur = conn.cursor()
-        cur.execute("""
+        scope_condition, scope_params = self._scope_assunto_condition("DM1744.COD_ASSUNTO", access_scope)
+        query = f"""
             SELECT
                 DM1744.COD_SOLICITACAO,
                 DM1744.TITULO_SOLICITACAO,
@@ -234,7 +302,7 @@ class ERPRepository:
                 NULLIF(TRIM(DM1744.ID_CARTAO_TRELLO), '') AS TRELLO_CARD_ID
             FROM BANCO01.DM1744
             LEFT JOIN public.DS0300 ON (DS0300.COD_USUARIO = DM1744.COD_USUARIO)
-            WHERE DM1744.COD_ASSUNTO IN (SELECT COD_ASSUNTO FROM BANCO01.DC1966 WHERE COD_DEPAR = 16)
+            WHERE {scope_condition}
               AND NULLIF(TRIM(DM1744.ID_CARTAO_TRELLO), '') IS NOT NULL
               AND NOT EXISTS (
                   SELECT 1
@@ -244,7 +312,10 @@ class ERPRepository:
               )
             ORDER BY DM1744.COD_SOLICITACAO DESC
             LIMIT %s
-        """, (int(limit) if limit else 30,))
+        """
+        params = list(scope_params)
+        params.append(int(limit) if limit else 30)
+        cur.execute(query, params)
         rows = cur.fetchall()
         columns = [col[0].lower() for col in cur.description]
         results = [dict(zip(columns, row)) for row in rows]
@@ -252,9 +323,10 @@ class ERPRepository:
         conn.close()
         return results
 
-    def buscar_estatisticas_base(self):
+    def buscar_estatisticas_base(self, access_scope=None):
         conn = get_erp_connection()
         cur = conn.cursor()
+        scope_condition, scope_params = self._scope_assunto_condition("DM1744.COD_ASSUNTO", access_scope)
         cur.execute(f"""
             SELECT 
                 CASE 
@@ -266,50 +338,41 @@ class ERPRepository:
                 END as categoria,
                 COUNT(*) as quantidade
             FROM BANCO01.DM1744 
-            WHERE DM1744.COD_ASSUNTO IN (SELECT COD_ASSUNTO FROM BANCO01.DC1966 WHERE COD_DEPAR = 16)
+            WHERE {scope_condition}
             GROUP BY categoria
-        """)
+        """, scope_params)
         rows = cur.fetchall()
         cur.close()
         conn.close()
         return rows
 
-    def buscar_titulos_por_status(self, status_codes):
+    def buscar_titulos_por_status(self, status_codes, access_scope=None):
         conn = get_erp_connection()
         cur = conn.cursor()
-        cur.execute("""
+        scope_condition, scope_params = self._scope_assunto_condition("DM1744.COD_ASSUNTO", access_scope)
+        cur.execute(f"""
             SELECT DM1744.TITULO_SOLICITACAO
             FROM BANCO01.DM1744
-            WHERE DM1744.COD_ASSUNTO IN (SELECT COD_ASSUNTO FROM BANCO01.DC1966 WHERE COD_DEPAR = 16)
+            WHERE {scope_condition}
               AND DM1744.COD_STATUS_DOC = ANY(%s)
-        """, (list(status_codes or []),))
+        """, tuple(scope_params + [list(status_codes or [])]))
         rows = cur.fetchall()
         cur.close()
         conn.close()
         return [r[0] for r in rows if r and r[0]]
 
-    def buscar_historico_periodo(self, start_erp, end_erp):
+    def buscar_historico_periodo(self, start_erp, end_erp, access_scope=None):
         conn = get_erp_connection()
         cur = conn.cursor()
         text_col = self._get_text_col(cur)
-        dashboard_user_cod = int(os.getenv("DASHBOARD_USER_COD", "1538"))
+        scope_conditions, scope_params = self._scope_ticket_conditions("DM1744", access_scope)
+        scope_where = f"WHERE {' AND '.join(scope_conditions)}" if scope_conditions else ""
 
         cur.execute(f"""
             WITH chamados_escopo AS (
                 SELECT DM1744.COD_SOLICITACAO
                 FROM BANCO01.DM1744
-                WHERE DM1744.NUM_BD IN (
-                    SELECT B.NUM_BD
-                    FROM BANCO01.DC1964 A
-                    INNER JOIN BANCO01.DC1965 B ON (B.COD_DEPAR = A.COD_DEPAR)
-                    WHERE A.COD_USUARIO = %s
-                )
-                AND DM1744.COD_ASSUNTO IN (
-                    SELECT B.COD_ASSUNTO
-                    FROM BANCO01.DC1964 A
-                    INNER JOIN BANCO01.DC1966 B ON (B.COD_DEPAR = A.COD_DEPAR)
-                    WHERE A.COD_USUARIO = %s
-                )
+                {scope_where}
             ),
             eventos AS (
                 SELECT
@@ -378,8 +441,7 @@ class ERPRepository:
             GROUP BY dia
             ORDER BY dia
         """, (
-            dashboard_user_cod,
-            dashboard_user_cod,
+            *scope_params,
             start_erp, end_erp,
             start_erp, end_erp,
             start_erp, end_erp,
@@ -464,28 +526,18 @@ class ERPRepository:
         conn.close()
         return {"abertos": int(abertos or 0), "atendidos": int(atendidos or 0), "aprovados": int(aprovados or 0), "finalizados": int(finalizados or 0), "encerrados": int(encerrados or 0)}
 
-    def buscar_kpis_status_hoje(self, d_erp):
+    def buscar_kpis_status_hoje(self, d_erp, access_scope=None):
         conn = get_erp_connection()
         cur = conn.cursor()
         text_col = self._get_text_col(cur)
-        dashboard_user_cod = int(os.getenv("DASHBOARD_USER_COD", "1538"))
+        scope_conditions, scope_params = self._scope_ticket_conditions("DM1744", access_scope)
+        scope_where = f"WHERE {' AND '.join(scope_conditions)}" if scope_conditions else ""
 
         cur.execute(f"""
             WITH chamados_escopo AS (
                 SELECT DM1744.COD_SOLICITACAO
                 FROM BANCO01.DM1744
-                WHERE DM1744.NUM_BD IN (
-                    SELECT B.NUM_BD
-                    FROM BANCO01.DC1964 A
-                    INNER JOIN BANCO01.DC1965 B ON (B.COD_DEPAR = A.COD_DEPAR)
-                    WHERE A.COD_USUARIO = %s
-                )
-                AND DM1744.COD_ASSUNTO IN (
-                    SELECT B.COD_ASSUNTO
-                    FROM BANCO01.DC1964 A
-                    INNER JOIN BANCO01.DC1966 B ON (B.COD_DEPAR = A.COD_DEPAR)
-                    WHERE A.COD_USUARIO = %s
-                )
+                {scope_where}
             ),
             chamados_nao_baixados AS (
                 SELECT DM1744.COD_SOLICITACAO
@@ -542,7 +594,7 @@ class ERPRepository:
                  INNER JOIN chamados_escopo C ON (C.COD_SOLICITACAO = DM1744.COD_SOLICITACAO)
                  WHERE DM1744.DATA_BAIXA = %s AND DM1744.COD_STATUS_DOC = 'BA'
                 ) AS baixados_hoje
-        """, (dashboard_user_cod, dashboard_user_cod, d_erp, d_erp, d_erp))
+        """, tuple(scope_params + [d_erp, d_erp, d_erp]))
 
         row = cur.fetchone() or (0, 0, 0, 0, 0, 0)
         cur.close()
@@ -556,17 +608,18 @@ class ERPRepository:
             "baixados_hoje": int(row[5] or 0),
         }
 
-    def buscar_recentes_para_tempo_medio(self, limit=200):
+    def buscar_recentes_para_tempo_medio(self, limit=200, access_scope=None):
         conn = get_erp_connection()
         cur = conn.cursor()
         text_col = self._get_text_col(cur)
+        scope_condition, scope_params = self._scope_assunto_condition("DM1744.COD_ASSUNTO", access_scope)
         cur.execute(f"""
             SELECT COD_SOLICITACAO, DATA_CAD, HORA_CAD, DATA_INIC_ATEND, HORA_INIC_ATEND, DATA_BAIXA, HORA_BAIXA, COD_STATUS_DOC
             FROM BANCO01.DM1744 
-            WHERE DM1744.COD_ASSUNTO IN (SELECT COD_ASSUNTO FROM BANCO01.DC1966 WHERE COD_DEPAR = 16)
+            WHERE {scope_condition}
             ORDER BY DATA_CAD DESC, HORA_CAD DESC
             LIMIT %s
-        """, (limit,))
+        """, tuple(scope_params + [limit]))
         tickets = cur.fetchall()
 
         ticket_ids = [int(t[0]) for t in tickets if t and t[0] is not None]
@@ -593,27 +646,17 @@ class ERPRepository:
         conn.close()
         return results
 
-    def buscar_produtividade_por_tecnico(self, start_erp, end_erp):
+    def buscar_produtividade_por_tecnico(self, start_erp, end_erp, access_scope=None):
         conn = get_erp_connection()
         cur = conn.cursor()
         text_col = self._get_text_col(cur)
-        dashboard_user_cod = int(os.getenv("DASHBOARD_USER_COD", "1538"))
+        scope_conditions, scope_params = self._scope_ticket_conditions("DM1744", access_scope)
+        scope_where = f"WHERE {' AND '.join(scope_conditions)}" if scope_conditions else ""
         cur.execute(f"""
             WITH chamados_escopo AS (
                 SELECT DM1744.COD_SOLICITACAO
                 FROM BANCO01.DM1744
-                WHERE DM1744.NUM_BD IN (
-                    SELECT B.NUM_BD
-                    FROM BANCO01.DC1964 A
-                    INNER JOIN BANCO01.DC1965 B ON (B.COD_DEPAR = A.COD_DEPAR)
-                    WHERE A.COD_USUARIO = %s
-                )
-                AND DM1744.COD_ASSUNTO IN (
-                    SELECT B.COD_ASSUNTO
-                    FROM BANCO01.DC1964 A
-                    INNER JOIN BANCO01.DC1966 B ON (B.COD_DEPAR = A.COD_DEPAR)
-                    WHERE A.COD_USUARIO = %s
-                )
+                {scope_where}
             ),
             chamados_nao_baixados AS (
                 SELECT DM1744.COD_SOLICITACAO
@@ -668,9 +711,7 @@ class ERPRepository:
                   AND H.{text_col} LIKE '%%Solicitação encerrada por%%'
             ) T
             ORDER BY T.DATA_GRAV ASC, T.TIPO ASC, T.COD_SOLICITACAO ASC
-        """, (
-            dashboard_user_cod,
-            dashboard_user_cod,
+        """, tuple(scope_params + [
             start_erp,
             end_erp,
             start_erp,
@@ -679,7 +720,7 @@ class ERPRepository:
             end_erp,
             start_erp,
             end_erp,
-        ))
+        ]))
         rows = cur.fetchall()
         results = [
             {
@@ -734,10 +775,11 @@ class ERPRepository:
         conn.close()
         return comms
 
-    def buscar_chamados_pendentes_base(self):
+    def buscar_chamados_pendentes_base(self, access_scope=None, limit=None):
         conn = get_erp_connection()
         cur = conn.cursor()
-        query = """
+        scope_condition, scope_params = self._scope_assunto_condition("DM1744.COD_ASSUNTO", access_scope)
+        query = f"""
             SELECT 
                 DM1744.COD_SOLICITACAO, 
                 DM1744.TITULO_SOLICITACAO, 
@@ -747,7 +789,7 @@ class ERPRepository:
             FROM BANCO01.DM1744 
             LEFT JOIN public.DS0300 ON (DS0300.COD_USUARIO = DM1744.COD_USUARIO)
             WHERE DM1744.COD_STATUS_DOC = 'IM'
-              AND DM1744.COD_ASSUNTO IN (SELECT COD_ASSUNTO FROM BANCO01.DC1966 WHERE COD_DEPAR = 16)
+              AND {scope_condition}
               AND NOT EXISTS (
                   SELECT 1 FROM BANCO01.DM1745 
                   WHERE COD_SOLICITACAO = DM1744.COD_SOLICITACAO 
@@ -755,7 +797,11 @@ class ERPRepository:
               )
             ORDER BY DM1744.DATA_CAD ASC, DM1744.HORA_CAD ASC
         """
-        cur.execute(query)
+        params = list(scope_params)
+        if limit is not None:
+            query += " LIMIT %s"
+            params.append(int(limit))
+        cur.execute(query, params)
         rows = cur.fetchall()
         columns = [col[0].lower() for col in cur.description]
         results = [dict(zip(columns, row)) for row in rows]
@@ -763,10 +809,11 @@ class ERPRepository:
         conn.close()
         return results
 
-    def buscar_chamados_abertos_recentes_base(self, start_erp, limit=80):
+    def buscar_chamados_abertos_recentes_base(self, start_erp, limit=80, access_scope=None):
         conn = get_erp_connection()
         cur = conn.cursor()
-        cur.execute("""
+        scope_condition, scope_params = self._scope_assunto_condition("DM1744.COD_ASSUNTO", access_scope)
+        cur.execute(f"""
             SELECT
                 DM1744.COD_SOLICITACAO,
                 DM1744.TITULO_SOLICITACAO,
@@ -776,11 +823,11 @@ class ERPRepository:
                 DS0300.NOME_USUARIO as SOLICITANTE
             FROM BANCO01.DM1744
             LEFT JOIN public.DS0300 ON (DS0300.COD_USUARIO = DM1744.COD_USUARIO)
-            WHERE DM1744.COD_ASSUNTO IN (SELECT COD_ASSUNTO FROM BANCO01.DC1966 WHERE COD_DEPAR = 16)
+            WHERE {scope_condition}
               AND DM1744.DATA_CAD >= %s
             ORDER BY DM1744.DATA_CAD DESC, DM1744.HORA_CAD DESC, DM1744.COD_SOLICITACAO DESC
             LIMIT %s
-        """, (start_erp, int(limit)))
+        """, tuple(scope_params + [start_erp, int(limit)]))
         rows = cur.fetchall()
         columns = [col[0].lower() for col in cur.description]
         results = [dict(zip(columns, row)) for row in rows]
@@ -802,11 +849,12 @@ class ERPRepository:
         ativo_filter = filtros.get('ativo') 
         aprovador_filter = filtros.get('aprovador')
         limit = filtros.get('limit')
+        access_scope = filtros.get('access_scope')
 
         conn = get_erp_connection()
         cur = conn.cursor()
         text_col = self._get_text_col(cur)
-        dashboard_user_cod = int(os.getenv("DASHBOARD_USER_COD", "1538"))
+        scope_condition, scope_params = self._scope_assunto_condition("DM1744.COD_ASSUNTO", access_scope)
 
         exists_subquery = f"""
             EXISTS (
@@ -831,10 +879,10 @@ class ERPRepository:
             LEFT JOIN public.DS0300 ON (DS0300.COD_USUARIO = DM1744.COD_USUARIO)
             LEFT JOIN BANCO01.DC1629 ON (DC1629.COD_ATIVO = DM1744.COD_ATIVO)
             LEFT JOIN BANCO01.DC1739 ON (DC1739.COD_ASSUNTO = DM1744.COD_ASSUNTO)
-            WHERE DM1744.COD_ASSUNTO IN (SELECT COD_ASSUNTO FROM BANCO01.DC1966 WHERE COD_DEPAR = 16)
+            WHERE {scope_condition}
         """
         
-        params = []
+        params = list(scope_params)
 
         if aprovador_filter:
             clean_approver = aprovador_filter.upper().split(" - ")[0].split(" -")[0].strip()
@@ -861,22 +909,6 @@ class ERPRepository:
                 query += " AND DM1744.DATA_CAD <= %s"
                 params.append(int(end_date.replace('-', '')))
         elif kpi_type == 'enviado_aprovacao_hoje':
-
-            query += """
-                AND DM1744.NUM_BD IN (
-                    SELECT B.NUM_BD
-                    FROM BANCO01.DC1964 A
-                    INNER JOIN BANCO01.DC1965 B ON (B.COD_DEPAR = A.COD_DEPAR)
-                    WHERE A.COD_USUARIO = %s
-                )
-                AND DM1744.COD_ASSUNTO IN (
-                    SELECT B.COD_ASSUNTO
-                    FROM BANCO01.DC1964 A
-                    INNER JOIN BANCO01.DC1966 B ON (B.COD_DEPAR = A.COD_DEPAR)
-                    WHERE A.COD_USUARIO = %s
-                )
-            """
-            params.extend([dashboard_user_cod, dashboard_user_cod])
             query += f""" AND EXISTS (
                 SELECT 1
                 FROM BANCO01.DM1745
@@ -891,22 +923,6 @@ class ERPRepository:
                 params.append(int(end_date.replace('-', '')))
             query += ")"
         elif kpi_type == 'aprovados_hoje':
-            
-            query += """
-                AND DM1744.NUM_BD IN (
-                    SELECT B.NUM_BD
-                    FROM BANCO01.DC1964 A
-                    INNER JOIN BANCO01.DC1965 B ON (B.COD_DEPAR = A.COD_DEPAR)
-                    WHERE A.COD_USUARIO = %s
-                )
-                AND DM1744.COD_ASSUNTO IN (
-                    SELECT B.COD_ASSUNTO
-                    FROM BANCO01.DC1964 A
-                    INNER JOIN BANCO01.DC1966 B ON (B.COD_DEPAR = A.COD_DEPAR)
-                    WHERE A.COD_USUARIO = %s
-                )
-            """
-            params.extend([dashboard_user_cod, dashboard_user_cod])
             query += f""" AND EXISTS (
                 SELECT 1
                 FROM BANCO01.DM1745
@@ -923,21 +939,6 @@ class ERPRepository:
                 params.append(int(end_date.replace('-', '')))
             query += ")"
         elif kpi_type == 'andamento_hoje':
-            query += """
-                AND DM1744.NUM_BD IN (
-                    SELECT B.NUM_BD
-                    FROM BANCO01.DC1964 A
-                    INNER JOIN BANCO01.DC1965 B ON (B.COD_DEPAR = A.COD_DEPAR)
-                    WHERE A.COD_USUARIO = %s
-                )
-                AND DM1744.COD_ASSUNTO IN (
-                    SELECT B.COD_ASSUNTO
-                    FROM BANCO01.DC1964 A
-                    INNER JOIN BANCO01.DC1966 B ON (B.COD_DEPAR = A.COD_DEPAR)
-                    WHERE A.COD_USUARIO = %s
-                )
-            """
-            params.extend([dashboard_user_cod, dashboard_user_cod])
             query += f""" AND EXISTS (
                 SELECT 1
                 FROM BANCO01.DM1745
@@ -954,21 +955,6 @@ class ERPRepository:
                 params.append(int(end_date.replace('-', '')))
             query += ")"
         elif kpi_type == 'finalizados_hoje':
-            query += """
-                AND DM1744.NUM_BD IN (
-                    SELECT B.NUM_BD
-                    FROM BANCO01.DC1964 A
-                    INNER JOIN BANCO01.DC1965 B ON (B.COD_DEPAR = A.COD_DEPAR)
-                    WHERE A.COD_USUARIO = %s
-                )
-                AND DM1744.COD_ASSUNTO IN (
-                    SELECT B.COD_ASSUNTO
-                    FROM BANCO01.DC1964 A
-                    INNER JOIN BANCO01.DC1966 B ON (B.COD_DEPAR = A.COD_DEPAR)
-                    WHERE A.COD_USUARIO = %s
-                )
-            """
-            params.extend([dashboard_user_cod, dashboard_user_cod])
             query += f""" AND EXISTS (
                 SELECT 1
                 FROM BANCO01.DM1745
@@ -983,21 +969,6 @@ class ERPRepository:
                 params.append(int(end_date.replace('-', '')))
             query += ")"
         elif kpi_type == 'baixados_hoje':
-            query += """
-                AND DM1744.NUM_BD IN (
-                    SELECT B.NUM_BD
-                    FROM BANCO01.DC1964 A
-                    INNER JOIN BANCO01.DC1965 B ON (B.COD_DEPAR = A.COD_DEPAR)
-                    WHERE A.COD_USUARIO = %s
-                )
-                AND DM1744.COD_ASSUNTO IN (
-                    SELECT B.COD_ASSUNTO
-                    FROM BANCO01.DC1964 A
-                    INNER JOIN BANCO01.DC1966 B ON (B.COD_DEPAR = A.COD_DEPAR)
-                    WHERE A.COD_USUARIO = %s
-                )
-            """
-            params.extend([dashboard_user_cod, dashboard_user_cod])
             query += f""" AND EXISTS (
                 SELECT 1
                 FROM BANCO01.DM1745
@@ -1097,11 +1068,12 @@ class ERPRepository:
         ativo_filter = filtros.get('ativo')
         aprovador_filter = filtros.get('aprovador')
         encerrados_limit = 1000
+        access_scope = filtros.get('access_scope')
 
         conn = get_erp_connection()
         cur = conn.cursor()
         text_col = self._get_text_col(cur)
-        dashboard_user_cod = int(os.getenv("DASHBOARD_USER_COD", "1538"))
+        scope_condition, scope_params = self._scope_assunto_condition("DM1744.COD_ASSUNTO", access_scope)
 
         query = f"""
             SELECT
@@ -1137,10 +1109,10 @@ class ERPRepository:
                 FROM BANCO01.DM1745 X
                 WHERE X.COD_SOLICITACAO = DM1744.COD_SOLICITACAO
             ) AUTH ON TRUE
-            WHERE DM1744.COD_ASSUNTO IN (SELECT COD_ASSUNTO FROM BANCO01.DC1966 WHERE COD_DEPAR = 16)
+            WHERE {scope_condition}
         """
 
-        params = []
+        params = list(scope_params)
 
         status_filter_set = set()
         if status_filter:
@@ -1166,23 +1138,6 @@ class ERPRepository:
                 )
             )"""
             params.extend([f"%{clean_approver}%", f"%APROVADA POR {clean_approver}%", f"%{clean_approver}%"])
-
-        if kpi_type in {'abertos_hoje', 'enviado_aprovacao_hoje', 'aprovados_hoje', 'andamento_hoje', 'finalizados_hoje', 'baixados_hoje'}:
-            query += """
-                AND DM1744.NUM_BD IN (
-                    SELECT B.NUM_BD
-                    FROM BANCO01.DC1964 A
-                    INNER JOIN BANCO01.DC1965 B ON (B.COD_DEPAR = A.COD_DEPAR)
-                    WHERE A.COD_USUARIO = %s
-                )
-                AND DM1744.COD_ASSUNTO IN (
-                    SELECT B.COD_ASSUNTO
-                    FROM BANCO01.DC1964 A
-                    INNER JOIN BANCO01.DC1966 B ON (B.COD_DEPAR = A.COD_DEPAR)
-                    WHERE A.COD_USUARIO = %s
-                )
-            """
-            params.extend([dashboard_user_cod, dashboard_user_cod])
 
         if kpi_type == 'abertos_hoje':
             if start_date:
@@ -1458,41 +1413,3 @@ class ERPRepository:
         # este método é apenas um placeholder ou deve ser removido em favor do LocalNoteRepository.
         # No DashboardService, vamos usar o LocalNoteRepository.
         pass
-        conn = get_erp_connection()
-        cur = conn.cursor()
-        text_col = self._get_text_col(cur)
-        cur.execute(f"""
-            SELECT 
-                DM1744.COD_SOLICITACAO,
-                DM1744.TITULO_SOLICITACAO,
-                DM1744.COD_STATUS_DOC,
-                DM1744.DATA_CAD,
-                DM1744.DATA_BAIXA,
-                DM1744.DATA_INIC_ATEND
-            FROM BANCO01.DM1744
-            WHERE (DM1744.DATA_CAD = %s OR DM1744.DATA_BAIXA = %s OR DM1744.DATA_INIC_ATEND = %s)
-              AND DM1744.COD_ASSUNTO IN (SELECT COD_ASSUNTO FROM BANCO01.DC1966 WHERE COD_DEPAR = 16)
-            ORDER BY DM1744.COD_SOLICITACAO DESC
-        """, (d_erp, d_erp, d_erp))
-        tickets = cur.fetchall()
-        
-        results = []
-        for t in tickets:
-            cod = t[0]
-            cur.execute(f"""
-                SELECT 
-                    DS0300.NOME_USUARIO,
-                    DM1745.{text_col},
-                    DM1745.DATA_GRAV,
-                    DM1745.HORA_GRAV
-                FROM BANCO01.DM1745 
-                JOIN public.DS0300 ON (DS0300.COD_USUARIO = DM1745.COD_USUARIO)
-                WHERE DM1745.COD_SOLICITACAO = %s AND DM1745.COD_USUARIO > 0
-                ORDER BY DM1745.DATA_GRAV ASC, DM1745.HORA_GRAV ASC
-            """, (cod,))
-            comms = cur.fetchall()
-            results.append({"ticket": t, "comentarios": comms})
-            
-        cur.close()
-        conn.close()
-        return results

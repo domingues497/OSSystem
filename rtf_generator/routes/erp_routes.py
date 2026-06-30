@@ -6,6 +6,7 @@ from services.chamado_service import ChamadoService
 from services.dashboard_service import DashboardService
 from services.produtividade_service import ProdutividadeService
 from config import Config
+from utils.auth_utils import get_access_scope
 
 erp_bp = Blueprint('erp', __name__)
 erp_repo = ERPRepository()
@@ -18,17 +19,17 @@ produtividade_service = ProdutividadeService(erp_repo)
 @erp_bp.route('/assuntos')
 def get_assuntos():
     tipo = request.args.get('tipo')
-    return jsonify(erp_repo.buscar_assuntos(tipo))
+    return jsonify(erp_repo.buscar_assuntos(tipo, access_scope=get_access_scope()))
 
 @erp_bp.route('/ativos')
 def get_ativos():
     tipo = request.args.get('tipo')
     assunto = request.args.get('assunto')
-    return jsonify(erp_repo.buscar_ativos(tipo, assunto))
+    return jsonify(erp_repo.buscar_ativos(tipo, assunto, access_scope=get_access_scope()))
 
 @erp_bp.route('/aprovadores')
 def get_aprovadores():
-    return jsonify(erp_repo.buscar_aprovadores())
+    return jsonify(erp_repo.buscar_aprovadores(access_scope=get_access_scope()))
 
 @erp_bp.route('/status')
 def get_status():
@@ -46,13 +47,14 @@ def get_chamados():
         'tipo': request.args.get('tipo'),
         'assunto': request.args.get('assunto'),
         'ativo': request.args.get('ativo'),
-        'aprovador': request.args.get('aprovador')
+        'aprovador': request.args.get('aprovador'),
+        'access_scope': get_access_scope(),
     }
     return jsonify(chamado_service.listar_chamados(filtros))
 
 @erp_bp.route('/chamado/<cod_solicitacao>')
 def get_chamado_detalhe(cod_solicitacao):
-    data = chamado_service.detalhar_chamado(cod_solicitacao)
+    data = chamado_service.detalhar_chamado(cod_solicitacao, access_scope=get_access_scope())
     if not data:
         return jsonify({"error": "Chamado não encontrado"}), 404
     return jsonify(data)
@@ -64,7 +66,7 @@ def get_estatisticas():
     kpi_date = request.args.get('kpi_date')
     debug_timing = (request.args.get('debug_timing') or "").strip().lower() in {"1", "true", "yes", "on"}
     t0 = perf_counter()
-    data = dashboard_service.obter_estatisticas(start, end, kpi_date, debug_timing=debug_timing)
+    data = dashboard_service.obter_estatisticas(start, end, kpi_date, debug_timing=debug_timing, access_scope=get_access_scope())
     resp = jsonify(data)
     resp.headers["X-Server-Time-ms"] = f"{(perf_counter() - t0) * 1000:.2f}"
     return resp
@@ -87,13 +89,20 @@ def get_kanban():
         'ativo': request.args.get('ativo'),
         'aprovador': request.args.get('aprovador'),
         'atendente': request.args.get('atendente'),
+        'access_scope': get_access_scope(),
     }
-    return jsonify(dashboard_service.obter_kanban(filtros))
+    data = dashboard_service.obter_kanban(filtros)
+    return jsonify(data)
 
 @erp_bp.route('/chamados_pendentes')
 def get_chamados_pendentes():
     t0 = perf_counter()
-    data = chamado_service.buscar_pendentes()
+    raw_limit = (request.args.get('limit') or '').strip()
+    try:
+        limit = int(raw_limit) if raw_limit else None
+    except Exception:
+        limit = None
+    data = chamado_service.buscar_pendentes(access_scope=get_access_scope(), limit=limit)
     resp = jsonify(data)
     resp.headers["X-Server-Time-ms"] = f"{(perf_counter() - t0) * 1000:.2f}"
     return resp
@@ -105,10 +114,11 @@ def get_trello_sem_rotulo():
         limit = int(raw) if raw else 30
     except Exception:
         limit = 30
-    return jsonify(dashboard_service.obter_trello_sem_rotulo(limit))
+    data = dashboard_service.obter_trello_sem_rotulo(limit, access_scope=get_access_scope())
+    return jsonify(data)
 
 @erp_bp.route('/produtividade')
 def get_produtividade_data():
     start = request.args.get('start_date')
     end = request.args.get('end_date')
-    return jsonify(produtividade_service.obter_produtividade(start, end))
+    return jsonify(produtividade_service.obter_produtividade(start, end, access_scope=get_access_scope()))

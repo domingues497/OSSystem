@@ -67,13 +67,13 @@ class ChamadoService:
             
         return enriquecidos
 
-    def detalhar_chamado(self, cod_solicitacao):
+    def detalhar_chamado(self, cod_solicitacao, access_scope=None):
         # 1. Buscar notas locais
         local_notes = self.local_repo.get_notes_by_ticket(cod_solicitacao)
         atendente_atual = self.local_repo.get_assignee_by_ticket(cod_solicitacao)
         
         # 2. Buscar dados base do ERP
-        erp_data = self.erp_repo.buscar_chamado_por_id(cod_solicitacao)
+        erp_data = self.erp_repo.buscar_chamado_por_id(cod_solicitacao, access_scope=access_scope)
         if not erp_data:
             return None
 
@@ -303,9 +303,9 @@ class ChamadoService:
         erp_data['fluxo_etapas'] = fluxo
         return erp_data
 
-    def buscar_pendentes(self):
+    def buscar_pendentes(self, access_scope=None, limit=None):
         """Busca chamados que ainda não tiveram interação técnica."""
-        results = self.erp_repo.buscar_chamados_pendentes_base()
+        results = self.erp_repo.buscar_chamados_pendentes_base(access_scope=access_scope, limit=limit)
         ticket_ids = [int(r['cod_solicitacao']) for r in results]
         tickets_with_notes = self.local_repo.get_ticket_ids_with_notes(ticket_ids) if ticket_ids else set()
         

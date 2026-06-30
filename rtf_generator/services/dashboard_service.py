@@ -14,7 +14,7 @@ class DashboardService:
         except Exception:
             self._estat_cache_ttl = 15
 
-    def obter_estatisticas(self, start_date_str=None, end_date_str=None, kpi_date_str=None, debug_timing=False):
+    def obter_estatisticas(self, start_date_str=None, end_date_str=None, kpi_date_str=None, debug_timing=False, access_scope=None):
         now = datetime.now()
         timing = {} if debug_timing else None
         t_total0 = perf_counter()
@@ -35,7 +35,10 @@ class DashboardService:
             kpi_dt = now
         today_erp = int(kpi_dt.strftime('%Y%m%d'))
 
-        cache_key = (start_dt.strftime('%Y-%m-%d'), end_dt.strftime('%Y-%m-%d'), kpi_dt.strftime('%Y-%m-%d'))
+        scope_key = (
+            "admin" if (access_scope or {}).get("is_admin") else tuple(sorted((access_scope or {}).get("subject_codes") or []))
+        )
+        cache_key = (start_dt.strftime('%Y-%m-%d'), end_dt.strftime('%Y-%m-%d'), kpi_dt.strftime('%Y-%m-%d'), scope_key)
         if not debug_timing and self._estat_cache_ttl > 0:
             cached = self._estat_cache.get(cache_key)
             if cached and (perf_counter() - cached["ts"]) < self._estat_cache_ttl:
@@ -50,7 +53,7 @@ class DashboardService:
 
         # 1. Buscar estatísticas base
         t0 = perf_counter()
-        rows = self.erp_repo.buscar_estatisticas_base()
+        rows = self.erp_repo.buscar_estatisticas_base(access_scope=access_scope)
         if timing is not None:
             timing["estatisticas_base_ms"] = round((perf_counter() - t0) * 1000, 2)
         
@@ -59,7 +62,7 @@ class DashboardService:
         distribuicao_tipos = {"Incidente": 0, "Requisição": 0, "BI": 0}
 
         t0 = perf_counter()
-        titulos = self.erp_repo.buscar_titulos_por_status(['IM', 'AB', 'AA', 'EA', 'AN', 'AV'])
+        titulos = self.erp_repo.buscar_titulos_por_status(['IM', 'AB', 'AA', 'EA', 'AN', 'AV'], access_scope=access_scope)
         for t in titulos:
             tipo = classify_ticket(t)
             distribuicao_tipos[tipo] += 1
@@ -86,7 +89,7 @@ class DashboardService:
         t0 = perf_counter()
         start_erp = int(start_dt.strftime('%Y%m%d'))
         end_erp = int(end_dt.strftime('%Y%m%d'))
-        historico_map = self.erp_repo.buscar_historico_periodo(start_erp, end_erp)
+        historico_map = self.erp_repo.buscar_historico_periodo(start_erp, end_erp, access_scope=access_scope)
         if timing is not None:
             timing["historico_periodo_ms"] = round((perf_counter() - t0) * 1000, 2)
 
@@ -110,13 +113,13 @@ class DashboardService:
             })
 
         t0 = perf_counter()
-        kpis = self.erp_repo.buscar_kpis_status_hoje(today_erp)
+        kpis = self.erp_repo.buscar_kpis_status_hoje(today_erp, access_scope=access_scope)
         if timing is not None:
             timing["kpis_ms"] = round((perf_counter() - t0) * 1000, 2)
 
         # 6. Tempos Médios
         t0 = perf_counter()
-        tempos_medios = self._calcular_tempos_medios()
+        tempos_medios = self._calcular_tempos_medios(access_scope=access_scope)
         if timing is not None:
             timing["tempos_medios_ms"] = round((perf_counter() - t0) * 1000, 2)
             
@@ -136,8 +139,8 @@ class DashboardService:
 
         return payload
 
-    def _calcular_tempos_medios(self):
-        recent_data = self.erp_repo.buscar_recentes_para_tempo_medio(200)
+    def _calcular_tempos_medios(self, access_scope=None):
+        recent_data = self.erp_repo.buscar_recentes_para_tempo_medio(200, access_scope=access_scope)
         transitions = {
             "abertura_atendimento": [],
             "atendimento_autorizacao": [],
@@ -194,8 +197,8 @@ class DashboardService:
             "Finalização → Encerramento": get_avg("finalizacao_encerramento")
         }
 
-    def obter_trello_sem_rotulo(self, limit=30):
-        results = self.erp_repo.buscar_trello_sem_rotulo_base(limit)
+    def obter_trello_sem_rotulo(self, limit=30, access_scope=None):
+        results = self.erp_repo.buscar_trello_sem_rotulo_base(limit, access_scope=access_scope)
         ticket_ids = [int(r['cod_solicitacao']) for r in results]
         tickets_with_notes = self.local_repo.get_ticket_ids_with_notes(ticket_ids) if ticket_ids else set()
 
@@ -272,6 +275,8 @@ class DashboardService:
             "aprovador": f_aprovador,
             "status": all_statuses
         }
+        if filtros.get("access_scope") is not None:
+            base_filters["access_scope"] = filtros.get("access_scope")
         base_rows = self.erp_repo.buscar_kanban_base(base_filters)
         ids = [r["id"] for r in base_rows]
         ids_with_notes = self.local_repo.get_ticket_ids_with_notes(ids)

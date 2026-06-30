@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - OSSystem</title>
+    <style>
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #eef4ff 0%, #f8fbff 100%);
+            color: #1f2937;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            box-sizing: border-box;
+        }
+        .login-shell {
+            width: 100%;
+            max-width: 420px;
+        }
+        .login-card {
+            background: #fff;
+            border: 1px solid #dbe5f4;
+            border-radius: 16px;
+            box-shadow: 0 18px 45px rgba(26, 115, 232, 0.12);
+            padding: 28px;
+        }
+        h1 {
+            margin: 0 0 6px;
+            font-size: 1.5rem;
+            color: #1a73e8;
+        }
+        .subtitle {
+            margin: 0 0 22px;
+            color: #5f6368;
+            font-size: 0.95rem;
+        }
+        .field {
+            margin-bottom: 14px;
+        }
+        .field label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #374151;
+        }
+        .field input {
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid #d0d7e2;
+            border-radius: 10px;
+            padding: 12px 14px;
+            font-size: 0.95rem;
+            outline: none;
+        }
+        .field input:focus {
+            border-color: #1a73e8;
+            box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
+        }
+        .error-box {
+            margin-bottom: 16px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid #f5c2c7;
+            background: #fff1f2;
+            color: #b42318;
+            font-size: 0.9rem;
+        }
+        .info-box {
+            margin-bottom: 16px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid #bfd3f2;
+            background: #f4f8ff;
+            color: #35558a;
+            font-size: 0.9rem;
+        }
+        .login-button {
+            width: 100%;
+            border: none;
+            border-radius: 10px;
+            background: #1a73e8;
+            color: #fff;
+            font-size: 0.95rem;
+            font-weight: 700;
+            padding: 12px 14px;
+            cursor: pointer;
+        }
+        .login-button:hover {
+            background: #1667d3;
+        }
+        .footer-note {
+            margin-top: 16px;
+            font-size: 0.82rem;
+            color: #6b7280;
+            line-height: 1.45;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-shell">
+        <div class="login-card">
+            <h1>OSSystem</h1>
+            <p class="subtitle">
+                {% if has_users %}
+                Informe seu usuario para acessar o dashboard e o kanban de chamados.
+                {% else %}
+                Nenhum usuario foi cadastrado ainda. Crie o primeiro acesso administrador.
+                {% endif %}
+            </p>
+
+            {% if error %}
+            <div class="error-box">{{ error }}</div>
+            {% endif %}
+
+            {% if has_users %}
+            <form method="post" action="{{ url_for('web.login') }}">
+                <input type="hidden" name="action" value="login">
+                <input type="hidden" name="next" value="{{ next_url }}">
+                <div class="field">
+                    <label for="username">Usuario</label>
+                    <input id="username" name="username" type="text" autocomplete="username" required>
+                </div>
+                <div class="field">
+                    <label for="password">Senha</label>
+                    <input id="password" name="password" type="password" autocomplete="current-password" required>
+                </div>
+                <button type="submit" class="login-button">Entrar</button>
+            </form>
+            {% else %}
+            <div class="info-box">
+                O primeiro usuario criado recebe perfil administrador e pode visualizar todos os assuntos.
+            </div>
+            <form method="post" action="{{ url_for('web.login') }}">
+                <input type="hidden" name="action" value="bootstrap">
+                <input type="hidden" name="next" value="{{ next_url }}">
+                <div class="field">
+                    <label for="display_name">Nome</label>
+                    <input id="display_name" name="display_name" type="text" required>
+                </div>
+                <div class="field">
+                    <label for="username">Usuario</label>
+                    <input id="username" name="username" type="text" autocomplete="username" required>
+                </div>
+                <div class="field">
+                    <label for="password">Senha</label>
+                    <input id="password" name="password" type="password" autocomplete="new-password" required>
+                </div>
+                <div class="field">
+                    <label for="confirm_password">Confirmar senha</label>
+                    <input id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" required>
+                </div>
+                <button type="submit" class="login-button">Criar administrador</button>
+            </form>
+            {% endif %}
+
+            <div class="footer-note">
+                A filtragem por assunto acontece no backend. Cada usuario enxerga apenas os chamados autorizados para os assuntos vinculados.
+            </div>
+        </div>
+    </div>
+</body>
+</html>

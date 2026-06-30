@@ -8,6 +8,8 @@ class Config:
     GENERATED_FOLDER = os.environ.get('GENERATED_FOLDER', 'generated')
     LOCAL_DB = os.getenv("LOCAL_DB_SCHEMA", "capalti")
     INIT_LOCAL_DB_ON_START = os.getenv("INIT_LOCAL_DB_ON_START", "0").strip().lower() in {"1", "true", "yes", "on"}
+    SECRET_KEY = os.getenv("FLASK_SECRET_KEY", "ossystem-dev-secret-change-me")
+    SESSION_COOKIE_NAME = os.getenv("SESSION_COOKIE_NAME", "ossystem_session")
     
     ERP_DB_NAME = os.getenv("ERP_DB_NAME")
     ERP_DB_USER = os.getenv("ERP_DB_USER")
