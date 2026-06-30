@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - OSSystem</title>
+    <title>Login</title>
     <style>
         body {
             margin: 0;
@@ -104,10 +104,10 @@
 <body>
     <div class="login-shell">
         <div class="login-card">
-            <h1>OSSystem</h1>
-            <p class="subtitle">
-                {% if has_users %}
-                Informe seu usuario para acessar o dashboard e o kanban de chamados.
+            <h1>SGC</h1>
+            <span class="subtitle">Sistema Gerenciador de Chamados</spam>
+             <P>   {% if has_users %}
+                Informe seu usuario para acessar
                 {% else %}
                 Nenhum usuario foi cadastrado ainda. Crie o primeiro acesso administrador.
                 {% endif %}
@@ -133,7 +133,7 @@
             </form>
             {% else %}
             <div class="info-box">
-                O primeiro usuario criado recebe perfil administrador e pode visualizar todos os assuntos.
+                Caso não saiba o seu usuario, favor entrar em ctto com(Rafael Domingues).
             </div>
             <form method="post" action="{{ url_for('web.login') }}">
                 <input type="hidden" name="action" value="bootstrap">
@@ -159,7 +159,7 @@
             {% endif %}
 
             <div class="footer-note">
-                A filtragem por assunto acontece no backend. Cada usuario enxerga apenas os chamados autorizados para os assuntos vinculados.
+                Caso não saiba o seu usuario, favor entrar em ctto com Rafael Domingues.
             </div>
         </div>
     </div>
