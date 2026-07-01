@@ -3,163 +3,353 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login</title>
+    <title>Login - Capal</title>
     <style>
+        :root {
+            --capal-blue: #0070b8;
+            --capal-yellow: #f9b200;
+            --capal-green: #39791f;
+            --capal-lime: #b1c800;
+            --capal-dark-green: #004e1b;
+            --capal-bg: #eef1eb;
+            --capal-surface: rgba(255, 255, 255, 0.94);
+            --capal-border: rgba(57, 121, 31, 0.18);
+            --capal-text: #1f2f20;
+            --capal-muted: #66756a;
+        }
         body {
             margin: 0;
             min-height: 100vh;
-            font-family: Arial, sans-serif;
-            background: linear-gradient(135deg, #eef4ff 0%, #f8fbff 100%);
-            color: #1f2937;
+            font-family: Corbel, "Trebuchet MS", "Segoe UI", Arial, sans-serif;
+            background:
+                radial-gradient(circle at top left, rgba(0, 112, 184, 0.18), transparent 28%),
+                radial-gradient(circle at bottom right, rgba(177, 200, 0, 0.2), transparent 32%),
+                linear-gradient(140deg, #edf1e8 0%, #f8faf7 48%, #eef5ee 100%);
+            color: var(--capal-text);
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 24px;
+            padding: 24px 16px;
             box-sizing: border-box;
         }
         .login-shell {
             width: 100%;
-            max-width: 420px;
+            max-width: 980px;
         }
         .login-card {
-            background: #fff;
-            border: 1px solid #dbe5f4;
-            border-radius: 16px;
-            box-shadow: 0 18px 45px rgba(26, 115, 232, 0.12);
-            padding: 28px;
+            display: grid;
+            grid-template-columns: minmax(280px, 1.05fr) minmax(320px, 0.95fr);
+            background: var(--capal-surface);
+            border: 1px solid var(--capal-border);
+            border-radius: 28px;
+            overflow: hidden;
+            box-shadow: 0 24px 70px rgba(0, 78, 27, 0.14);
+            backdrop-filter: blur(10px);
+        }
+        .brand-panel {
+            position: relative;
+            padding: 40px 36px;
+            min-height: 520px;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.84) 0%, rgba(160, 184, 149, 0.82) 52%, rgba(0, 78, 27, 0.92) 100%),
+                linear-gradient(135deg, rgba(0, 112, 184, 0.14), rgba(249, 178, 0, 0.12));
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .brand-panel::before,
+        .brand-panel::after {
+            content: "";
+            position: absolute;
+            inset: auto;
+            border-radius: 28px;
+            opacity: 0.22;
+            pointer-events: none;
+        }
+        .brand-panel::before {
+            width: 240px;
+            height: 240px;
+            right: -60px;
+            top: -40px;
+            background: linear-gradient(135deg, var(--capal-yellow), var(--capal-blue));
+            transform: rotate(35deg);
+        }
+        .brand-panel::after {
+            width: 280px;
+            height: 280px;
+            left: -100px;
+            bottom: -110px;
+            background: linear-gradient(135deg, var(--capal-lime), var(--capal-dark-green));
+            transform: rotate(25deg);
+        }
+        .brand-top,
+        .brand-bottom {
+            position: relative;
+            z-index: 1;
+        }
+        .brand-mark {
+            width: min(340px, 100%);
+            display: block;
+            margin: 0;
+        }
+        .brand-mark-shell {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 28px;
+            padding: 0;
+            border-radius: 0;
+            background: transparent;
+            border: none;
+            box-shadow: none;
+        }
+        .brand-mark-shell img {
+            filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.14));
+        }
+        .eyebrow {
+            display: inline-block;
+            margin-bottom: 10px;
+            font-size: 0.95rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        .brand-title {
+            margin: 0 0 14px;
+            font-size: clamp(2rem, 3vw, 2.8rem);
+            line-height: 1.05;
+            font-weight: 700;
+        }
+        .brand-text {
+            max-width: 440px;
+            margin: 0;
+            font-size: 1.02rem;
+            line-height: 1.6;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        .brand-values {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 28px;
+        }
+        .brand-chip {
+            padding: 8px 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            background: rgba(255, 255, 255, 0.08);
+            font-size: 0.88rem;
+            font-weight: 700;
+        }
+        .login-panel {
+            padding: 40px 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.96)),
+                linear-gradient(135deg, rgba(0, 112, 184, 0.03), rgba(177, 200, 0, 0.04));
+        }
+        .login-panel-inner {
+            width: 100%;
+            max-width: 360px;
         }
         h1 {
             margin: 0 0 6px;
-            font-size: 1.5rem;
-            color: #1a73e8;
+            font-size: 2rem;
+            color: var(--capal-dark-green);
+            letter-spacing: 0.01em;
         }
         .subtitle {
-            margin: 0 0 22px;
-            color: #5f6368;
-            font-size: 0.95rem;
+            display: block;
+            margin: 0 0 12px;
+            color: var(--capal-green);
+            font-size: 1rem;
+            font-weight: 700;
+        }
+        .intro-text {
+            margin: 0 0 24px;
+            color: var(--capal-muted);
+            font-size: 0.97rem;
+            line-height: 1.55;
         }
         .field {
-            margin-bottom: 14px;
+            margin-bottom: 16px;
         }
         .field label {
             display: block;
             margin-bottom: 6px;
-            font-size: 0.85rem;
+            font-size: 0.88rem;
             font-weight: 700;
-            color: #374151;
+            color: var(--capal-dark-green);
         }
         .field input {
             width: 100%;
             box-sizing: border-box;
-            border: 1px solid #d0d7e2;
-            border-radius: 10px;
-            padding: 12px 14px;
-            font-size: 0.95rem;
+            border: 1px solid rgba(57, 121, 31, 0.2);
+            border-radius: 14px;
+            padding: 13px 14px;
+            font-size: 1rem;
             outline: none;
+            background: rgba(255, 255, 255, 0.95);
+            color: var(--capal-text);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
         }
         .field input:focus {
-            border-color: #1a73e8;
-            box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
+            border-color: var(--capal-blue);
+            box-shadow: 0 0 0 4px rgba(0, 112, 184, 0.12);
+            transform: translateY(-1px);
         }
         .error-box {
-            margin-bottom: 16px;
-            padding: 10px 12px;
-            border-radius: 10px;
-            border: 1px solid #f5c2c7;
-            background: #fff1f2;
+            margin-bottom: 18px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(180, 35, 24, 0.18);
+            background: rgba(255, 241, 242, 0.92);
             color: #b42318;
             font-size: 0.9rem;
         }
         .info-box {
-            margin-bottom: 16px;
-            padding: 10px 12px;
-            border-radius: 10px;
-            border: 1px solid #bfd3f2;
-            background: #f4f8ff;
+            margin-bottom: 18px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(0, 112, 184, 0.18);
+            background: rgba(239, 248, 255, 0.96);
             color: #35558a;
             font-size: 0.9rem;
         }
         .login-button {
             width: 100%;
             border: none;
-            border-radius: 10px;
-            background: #1a73e8;
+            border-radius: 14px;
+            background: linear-gradient(135deg, var(--capal-green) 0%, var(--capal-dark-green) 100%);
             color: #fff;
-            font-size: 0.95rem;
+            font-size: 1rem;
             font-weight: 700;
-            padding: 12px 14px;
+            padding: 13px 16px;
             cursor: pointer;
+            box-shadow: 0 14px 30px rgba(0, 78, 27, 0.2);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
         }
         .login-button:hover {
-            background: #1667d3;
+            transform: translateY(-1px);
+            box-shadow: 0 18px 34px rgba(0, 78, 27, 0.24);
+            filter: brightness(1.03);
         }
         .footer-note {
-            margin-top: 16px;
-            font-size: 0.82rem;
-            color: #6b7280;
+            margin-top: 18px;
+            font-size: 0.84rem;
+            color: var(--capal-muted);
             line-height: 1.45;
+        }
+        .divider {
+            width: 72px;
+            height: 4px;
+            border-radius: 999px;
+            background: linear-gradient(90deg, var(--capal-yellow), var(--capal-lime), var(--capal-green), var(--capal-blue));
+            margin: 0 0 24px;
+        }
+        @media (max-width: 860px) {
+            .login-card {
+                grid-template-columns: 1fr;
+            }
+            .brand-panel {
+                min-height: auto;
+                padding: 32px 28px;
+            }
+            .login-panel {
+                padding: 32px 28px;
+            }
+        }
+        @media (max-width: 520px) {
+            body {
+                padding: 12px;
+            }
+            .brand-panel,
+            .login-panel {
+                padding: 24px 20px;
+            }
+            h1 {
+                font-size: 1.7rem;
+            }
         }
     </style>
 </head>
 <body>
     <div class="login-shell">
         <div class="login-card">
-            <h1>SGC</h1>
-            <span class="subtitle">Sistema Gerenciador de Chamados</spam>
-             <P>   {% if has_users %}
-                Informe seu usuario para acessar
-                {% else %}
-                Nenhum usuario foi cadastrado ainda. Crie o primeiro acesso administrador.
-                {% endif %}
-            </p>
-
-            {% if error %}
-            <div class="error-box">{{ error }}</div>
-            {% endif %}
-
-            {% if has_users %}
-            <form method="post" action="{{ url_for('web.login') }}">
-                <input type="hidden" name="action" value="login">
-                <input type="hidden" name="next" value="{{ next_url }}">
-                <div class="field">
-                    <label for="username">Usuario</label>
-                    <input id="username" name="username" type="text" autocomplete="username" required>
+            <div class="brand-panel">
+                <div class="brand-top">
+                    <div class="brand-mark-shell">
+                        <img src="{{ url_for('static', filename='img/logo-capal-transparent.png') }}" alt="Capal" class="brand-mark">
+                    </div>
+                    <h1 class="brand-title">SGC</h1>
+                    <h2 class="brand-title">Sistema Gerenciador de Chamados</h2>
                 </div>
-                <div class="field">
-                    <label for="password">Senha</label>
-                    <input id="password" name="password" type="password" autocomplete="current-password" required>
-                </div>
-                <button type="submit" class="login-button">Entrar</button>
-            </form>
-            {% else %}
-            <div class="info-box">
-                Caso não saiba o seu usuario, favor entrar em ctto com(Rafael Domingues).
             </div>
-            <form method="post" action="{{ url_for('web.login') }}">
-                <input type="hidden" name="action" value="bootstrap">
-                <input type="hidden" name="next" value="{{ next_url }}">
-                <div class="field">
-                    <label for="display_name">Nome</label>
-                    <input id="display_name" name="display_name" type="text" required>
-                </div>
-                <div class="field">
-                    <label for="username">Usuario</label>
-                    <input id="username" name="username" type="text" autocomplete="username" required>
-                </div>
-                <div class="field">
-                    <label for="password">Senha</label>
-                    <input id="password" name="password" type="password" autocomplete="new-password" required>
-                </div>
-                <div class="field">
-                    <label for="confirm_password">Confirmar senha</label>
-                    <input id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" required>
-                </div>
-                <button type="submit" class="login-button">Criar administrador</button>
-            </form>
-            {% endif %}
+            <div class="login-panel">
+                <div class="login-panel-inner">
+                    <h1>Entrar</h1>
+                    <span class="subtitle">Acesso ao ambiente de gerenciamento de chamados</span>
+                    <div class="divider"></div>
+                    <p class="intro-text">
+                        {% if has_users %}
+                        Informe seu usuario e senha para acessar o painel.
+                        {% else %}
+                        Nenhum usuario foi cadastrado ainda. Crie abaixo o primeiro acesso administrador.
+                        {% endif %}
+                    </p>
 
-            <div class="footer-note">
-                Caso não saiba o seu usuario, favor entrar em ctto com Rafael Domingues.
+                    {% if error %}
+                    <div class="error-box">{{ error }}</div>
+                    {% endif %}
+
+                    {% if has_users %}
+                    <form method="post" action="{{ url_for('web.login') }}">
+                        <input type="hidden" name="action" value="login">
+                        <input type="hidden" name="next" value="{{ next_url }}">
+                        <div class="field">
+                            <label for="username">Usuario</label>
+                            <input id="username" name="username" type="text" autocomplete="username" required>
+                        </div>
+                        <div class="field">
+                            <label for="password">Senha</label>
+                            <input id="password" name="password" type="password" autocomplete="current-password" required>
+                        </div>
+                        <button type="submit" class="login-button">Entrar</button>
+                    </form>
+                    {% else %}
+                    <div class="info-box">
+                        Se este for o primeiro acesso, cadastre o administrador inicial do sistema.
+                    </div>
+                    <form method="post" action="{{ url_for('web.login') }}">
+                        <input type="hidden" name="action" value="bootstrap">
+                        <input type="hidden" name="next" value="{{ next_url }}">
+                        <div class="field">
+                            <label for="display_name">Nome</label>
+                            <input id="display_name" name="display_name" type="text" required>
+                        </div>
+                        <div class="field">
+                            <label for="username">Usuario</label>
+                            <input id="username" name="username" type="text" autocomplete="username" required>
+                        </div>
+                        <div class="field">
+                            <label for="password">Senha</label>
+                            <input id="password" name="password" type="password" autocomplete="new-password" required>
+                        </div>
+                        <div class="field">
+                            <label for="confirm_password">Confirmar senha</label>
+                            <input id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" required>
+                        </div>
+                        <button type="submit" class="login-button">Criar administrador</button>
+                    </form>
+                    {% endif %}
+
+                    <div class="footer-note">
+                        Caso nao saiba o seu usuario, entre em contato com Rafael Domingues.
+                    </div>
+                </div>
             </div>
         </div>
     </div>

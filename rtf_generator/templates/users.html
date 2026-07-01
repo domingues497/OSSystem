@@ -92,6 +92,24 @@
             gap: 8px;
             margin-bottom: 14px;
         }
+        .checkbox-stack {
+            display: grid;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+        .checkbox-panel {
+            border: 1px solid #dbe5f4;
+            border-radius: 12px;
+            padding: 12px;
+            background: #fbfdff;
+        }
+        .checkbox-panel-title {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #374151;
+        }
         .subjects-box {
             border: 1px solid #dbe5f4;
             border-radius: 12px;
@@ -203,6 +221,12 @@
             line-height: 1.45;
             margin-top: 8px;
         }
+        .panel-help {
+            margin-top: 10px;
+            font-size: 0.8rem;
+            color: #6b7280;
+            line-height: 1.5;
+        }
         @media (max-width: 960px) {
             .grid {
                 grid-template-columns: 1fr;
@@ -262,6 +286,53 @@
                     <div class="checkbox-row">
                         <input id="is_active" name="is_active" type="checkbox" value="1" checked>
                         <label for="is_active" style="margin: 0;">Usuario ativo</label>
+                    </div>
+                    <div class="checkbox-panel">
+                        <span class="checkbox-panel-title">Grafico da Dashboard</span>
+                        <div class="checkbox-stack">
+                            <label class="checkbox-row" style="margin: 0;">
+                                <input id="chart_show_external" name="chart_show_external" type="checkbox" value="1" checked>
+                                <span>Exibir Status (Externo)</span>
+                            </label>
+                            <label class="checkbox-row" style="margin: 0;">
+                                <input id="chart_show_internal" name="chart_show_internal" type="checkbox" value="1" checked>
+                                <span>Exibir Tipos (Interno)</span>
+                            </label>
+                        </div>
+                        <div class="panel-help">
+                            `Status (Externo)` mostra a distribuicao por etapas do chamado, como Aberta, Aguardando, Em Andamento e Avaliacao.
+                            `Tipos (Interno)` mostra a classificacao interna, como Incidente, Requisicao e BI.
+                        </div>
+                    </div>
+                    <div class="checkbox-panel">
+                        <span class="checkbox-panel-title">Status usados no grafico externo</span>
+                        <div class="subjects-box">
+                            {% for status in available_chart_statuses %}
+                            <label class="subject-item">
+                                <input type="checkbox" name="chart_status_codes" value="{{ status.code }}" checked>
+                                <span>{{ status.code }} - {{ status.label }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        <div class="panel-help">
+                            Esses status definem quais etapas entram na legenda e no anel externo do grafico.
+                            Se marcar `IM` e `AB`, ambos entram somados em `Aberta`. O mesmo vale para `EA` e `AN` em `Em andamento`.
+                        </div>
+                    </div>
+                    <div class="checkbox-panel">
+                        <span class="checkbox-panel-title">Status exibidos no kanban</span>
+                        <div class="subjects-box">
+                            {% for status in available_kanban_statuses %}
+                            <label class="subject-item">
+                                <input type="checkbox" name="kanban_status_codes" value="{{ status.code }}" checked>
+                                <span>{{ status.code }} - {{ status.label }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        <div class="panel-help">
+                            Esses status controlam quais colunas aparecem no quadro de chamados desse usuario.
+                            O kanban usa configuracao propria, separada do grafico da dashboard.
+                        </div>
                     </div>
                     <div id="create-subjects-box">
                         <label style="display:block; margin-bottom: 8px; font-size: 0.85rem; font-weight: 700; color: #374151;">Assuntos permitidos</label>
@@ -323,6 +394,51 @@
                             <div class="checkbox-row">
                                 <input id="active-{{ user.id }}" name="is_active" type="checkbox" value="1" {% if user.is_active %}checked{% endif %}>
                                 <label for="active-{{ user.id }}" style="margin: 0;">Usuario ativo</label>
+                            </div>
+                            <div class="checkbox-panel">
+                                <span class="checkbox-panel-title">Grafico da Dashboard</span>
+                                <div class="checkbox-stack">
+                                    <label class="checkbox-row" style="margin: 0;">
+                                        <input id="external-{{ user.id }}" name="chart_show_external" type="checkbox" value="1" {% if user.chart_show_external %}checked{% endif %}>
+                                        <span>Exibir Status (Externo)</span>
+                                    </label>
+                                    <label class="checkbox-row" style="margin: 0;">
+                                        <input id="internal-{{ user.id }}" name="chart_show_internal" type="checkbox" value="1" {% if user.chart_show_internal %}checked{% endif %}>
+                                        <span>Exibir Tipos (Interno)</span>
+                                    </label>
+                                </div>
+                                <div class="panel-help">
+                                    `Status (Externo)` mostra a distribuicao por etapas do chamado.
+                                    `Tipos (Interno)` mostra a classificacao interna usada no sistema.
+                                </div>
+                            </div>
+                            <div class="checkbox-panel">
+                                <span class="checkbox-panel-title">Status usados no grafico externo</span>
+                                <div class="subjects-box">
+                                    {% for status in available_chart_statuses %}
+                                    <label class="subject-item">
+                                        <input name="chart_status_codes" type="checkbox" value="{{ status.code }}" {% if status.code in user.chart_status_codes %}checked{% endif %}>
+                                        <span>{{ status.code }} - {{ status.label }}</span>
+                                    </label>
+                                    {% endfor %}
+                                </div>
+                                <div class="panel-help">
+                                    Esses status definem quais etapas aparecem na legenda e compoem o grafico externo desse usuario.
+                                </div>
+                            </div>
+                            <div class="checkbox-panel">
+                                <span class="checkbox-panel-title">Status exibidos no kanban</span>
+                                <div class="subjects-box">
+                                    {% for status in available_kanban_statuses %}
+                                    <label class="subject-item">
+                                        <input name="kanban_status_codes" type="checkbox" value="{{ status.code }}" {% if status.code in user.kanban_status_codes %}checked{% endif %}>
+                                        <span>{{ status.code }} - {{ status.label }}</span>
+                                    </label>
+                                    {% endfor %}
+                                </div>
+                                <div class="panel-help">
+                                    Esses status controlam as colunas exibidas no kanban e nao reutilizam a configuracao do grafico.
+                                </div>
                             </div>
                             <div id="subjects-box-{{ user.id }}" {% if user.profile == 'admin' %}style="display:none;"{% endif %}>
                                 <label style="display:block; margin-bottom: 8px; font-size: 0.85rem; font-weight: 700; color: #374151;">Assuntos permitidos</label>

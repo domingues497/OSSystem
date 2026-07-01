@@ -1,6 +1,13 @@
 from functools import wraps
 
 from flask import jsonify, redirect, request, session, url_for
+from utils.dashboard_statuses import (
+    get_default_dashboard_status_codes,
+    get_default_kanban_status_codes,
+    get_kanban_column_ids,
+    normalize_dashboard_status_codes,
+    normalize_kanban_column_order,
+)
 
 
 SESSION_USER_KEY = "auth_user"
@@ -35,6 +42,12 @@ def get_access_scope():
             "is_admin": False,
             "subject_codes": [],
             "subject_names": [],
+            "chart_show_external": True,
+            "chart_show_internal": True,
+            "chart_status_codes": get_default_dashboard_status_codes(),
+            "kanban_status_codes": get_default_kanban_status_codes(),
+            "kanban_column_ids": get_kanban_column_ids(),
+            "user_id": None,
             "username": "",
             "display_name": "",
             "profile": "",
@@ -44,11 +57,20 @@ def get_access_scope():
     is_admin = (user.get("profile") or "").lower() == "admin"
     subject_codes = _clean_scope_codes(user.get("subject_codes") or [])
     subject_names = [str(name).strip() for name in (user.get("subject_names") or []) if str(name).strip()]
+    chart_status_codes = normalize_dashboard_status_codes(user.get("chart_status_codes")) or get_default_dashboard_status_codes()
+    kanban_status_codes = normalize_dashboard_status_codes(user.get("kanban_status_codes")) or get_default_kanban_status_codes()
+    kanban_column_ids = normalize_kanban_column_order(user.get("kanban_column_order"), kanban_status_codes)
     return {
         "authenticated": True,
         "is_admin": is_admin,
         "subject_codes": subject_codes,
         "subject_names": subject_names,
+        "chart_show_external": bool(user.get("chart_show_external", True)),
+        "chart_show_internal": bool(user.get("chart_show_internal", True)),
+        "chart_status_codes": chart_status_codes,
+        "kanban_status_codes": kanban_status_codes,
+        "kanban_column_ids": kanban_column_ids,
+        "user_id": user.get("id"),
         "username": user.get("username") or "",
         "display_name": user.get("display_name") or "",
         "profile": user.get("profile") or "",
@@ -65,6 +87,14 @@ def store_user_session(user):
         "profile": user.get("profile") or "subject",
         "subject_codes": _clean_scope_codes([d.get("cod_assunto") for d in subjects]),
         "subject_names": [str(d.get("descr_assunto") or "").strip() for d in subjects if str(d.get("descr_assunto") or "").strip()],
+        "chart_show_external": bool(user.get("chart_show_external", True)),
+        "chart_show_internal": bool(user.get("chart_show_internal", True)),
+        "chart_status_codes": normalize_dashboard_status_codes(user.get("chart_status_codes")) or get_default_dashboard_status_codes(),
+        "kanban_status_codes": normalize_dashboard_status_codes(user.get("kanban_status_codes")) or get_default_kanban_status_codes(),
+        "kanban_column_order": normalize_kanban_column_order(
+            user.get("kanban_column_order"),
+            normalize_dashboard_status_codes(user.get("kanban_status_codes")) or get_default_kanban_status_codes(),
+        ),
     }
     session.permanent = True
 

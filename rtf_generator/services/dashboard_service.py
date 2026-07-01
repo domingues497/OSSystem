@@ -1,4 +1,12 @@
 from utils.classifier import classify_ticket
+from utils.dashboard_statuses import (
+    STATUS_BY_CODE,
+    get_default_dashboard_status_codes,
+    get_default_kanban_status_codes,
+    get_kanban_group_definitions,
+    normalize_kanban_column_order,
+    normalize_dashboard_status_codes,
+)
 from datetime import datetime, timedelta
 from utils.datetime_utils import erp_to_datetime, format_duration_short
 from time import perf_counter
@@ -13,6 +21,65 @@ class DashboardService:
             self._estat_cache_ttl = int(os.getenv("DASHBOARD_CACHE_SECONDS", "15"))
         except Exception:
             self._estat_cache_ttl = 15
+
+    def _can_show_internal_chart(self, access_scope=None):
+        if not access_scope:
+            return True
+        return bool(access_scope.get("chart_show_internal", True))
+
+    def _can_show_external_chart(self, access_scope=None):
+        if not access_scope:
+            return True
+        return bool(access_scope.get("chart_show_external", True))
+
+    def _get_selected_status_codes(self, access_scope=None):
+        codes = normalize_dashboard_status_codes((access_scope or {}).get("chart_status_codes"))
+        return codes or get_default_dashboard_status_codes()
+
+    def _get_selected_kanban_status_codes(self, access_scope=None):
+        codes = normalize_dashboard_status_codes((access_scope or {}).get("kanban_status_codes"))
+        return codes or get_default_kanban_status_codes()
+
+    def _build_external_stats(self, rows, selected_codes):
+        grouped = {}
+        order_map = {code: index for index, code in enumerate(get_default_dashboard_status_codes())}
+        for row in rows:
+            status_code = str(row[0] or "").strip().upper()
+            if status_code not in selected_codes or status_code not in STATUS_BY_CODE:
+                continue
+            status_info = STATUS_BY_CODE[status_code]
+            chart_key = status_info["chart_label"]
+            current = grouped.setdefault(
+                chart_key,
+                {
+                    "codigo": chart_key,
+                    "descricao": status_info["chart_label"],
+                    "quantidade": 0,
+                    "status_codes": [],
+                    "_order": order_map.get(status_code, 999),
+                },
+            )
+            current["quantidade"] += int(row[1] or 0)
+            if status_code not in current["status_codes"]:
+                current["status_codes"].append(status_code)
+            current["_order"] = min(current["_order"], order_map.get(status_code, 999))
+
+        total_para_percentual = sum(item["quantidade"] for item in grouped.values())
+        stats = []
+        for item in sorted(grouped.values(), key=lambda current: (current["_order"], current["descricao"])):
+            percent = (item["quantidade"] / total_para_percentual * 100) if total_para_percentual > 0 else 0
+            stats.append(
+                {
+                    "codigo": item["codigo"],
+                    "descricao": item["descricao"],
+                    "quantidade": item["quantidade"],
+                    "percentual": round(percent, 2),
+                    "ignorar_percentual": False,
+                    "status_codes": item["status_codes"],
+                    "filtro_status": ",".join(item["status_codes"]),
+                }
+            )
+        return stats
 
     def obter_estatisticas(self, start_date_str=None, end_date_str=None, kpi_date_str=None, debug_timing=False, access_scope=None):
         now = datetime.now()
@@ -36,7 +103,10 @@ class DashboardService:
         today_erp = int(kpi_dt.strftime('%Y%m%d'))
 
         scope_key = (
-            "admin" if (access_scope or {}).get("is_admin") else tuple(sorted((access_scope or {}).get("subject_codes") or []))
+            "admin" if (access_scope or {}).get("is_admin") else tuple(sorted((access_scope or {}).get("subject_codes") or [])),
+            bool((access_scope or {}).get("chart_show_external", True)),
+            bool((access_scope or {}).get("chart_show_internal", True)),
+            tuple(self._get_selected_status_codes(access_scope)),
         )
         cache_key = (start_dt.strftime('%Y-%m-%d'), end_dt.strftime('%Y-%m-%d'), kpi_dt.strftime('%Y-%m-%d'), scope_key)
         if not debug_timing and self._estat_cache_ttl > 0:
@@ -58,32 +128,19 @@ class DashboardService:
             timing["estatisticas_base_ms"] = round((perf_counter() - t0) * 1000, 2)
         
         # 2. Calcular distribuição de tipos (Heurística)
-        categorias_alvo = ['Aberta', 'Aguardando', 'Andamento', 'Avaliação']
         distribuicao_tipos = {"Incidente": 0, "Requisição": 0, "BI": 0}
+        can_show_internal_chart = self._can_show_internal_chart(access_scope)
+        selected_status_codes = self._get_selected_status_codes(access_scope)
+        stats = self._build_external_stats(rows, selected_status_codes)
 
         t0 = perf_counter()
-        titulos = self.erp_repo.buscar_titulos_por_status(['IM', 'AB', 'AA', 'EA', 'AN', 'AV'], access_scope=access_scope)
-        for t in titulos:
-            tipo = classify_ticket(t)
-            distribuicao_tipos[tipo] += 1
+        if can_show_internal_chart:
+            titulos = self.erp_repo.buscar_titulos_por_status(selected_status_codes, access_scope=access_scope)
+            for t in titulos:
+                tipo = classify_ticket(t)
+                distribuicao_tipos[tipo] += 1
         if timing is not None:
             timing["distribuicao_tipos_ms"] = round((perf_counter() - t0) * 1000, 2)
-
-        # 3. Processar percentuais e categorias
-        total_para_percentual = sum(row[1] for row in rows if row[0] in categorias_alvo)
-        
-        stats = []
-        for row in rows:
-            cat = row[0]
-            count = row[1]
-            percent = (count / total_para_percentual * 100) if total_para_percentual > 0 and cat in categorias_alvo else 0
-            stats.append({
-                "codigo": cat,
-                "descricao": cat,
-                "quantidade": count,
-                "percentual": round(percent, 2),
-                "ignorar_percentual": cat not in categorias_alvo
-            })
 
         # 4. Histórico do período
         t0 = perf_counter()
@@ -236,29 +293,17 @@ class DashboardService:
         f_ativo = filtros.get('ativo')
         f_aprovador = filtros.get('aprovador')
         f_atendente = filtros.get('atendente')
+        access_scope = filtros.get("access_scope")
 
-        # Construir query base (simplificado no repositório agora)
-        # O repositório precisa de buscar_coluna_kanban(query, params)
-        # Vamos usar o método listar_chamados_com_filtros mas apenas para os status do Kanban
-        
-        colunas = {
-            "aberta": ['IM', 'AB'],
-            "aguardando": ['AA'],
-            "andamento": ['EA', 'AN'],
-            "avaliacao": ['AV'],
-            "encerrados": ['BA']
-        }
-        
-        status_map = {
-            "aberta": set(['IM', 'AB']),
-            "aguardando": set(['AA']),
-            "andamento": set(['EA', 'AN']),
-            "avaliacao": set(['AV']),
-            "encerrados": set(['BA'])
-        }
+        selected_kanban_status_codes = self._get_selected_kanban_status_codes(access_scope)
+        kanban_groups = get_kanban_group_definitions(selected_kanban_status_codes)
+        ordered_column_ids = normalize_kanban_column_order((access_scope or {}).get("kanban_column_ids"), selected_kanban_status_codes)
+        kanban_groups_by_id = {group["id"]: group for group in kanban_groups}
+        kanban_groups = [kanban_groups_by_id[column_id] for column_id in ordered_column_ids if column_id in kanban_groups_by_id]
+        status_map = {group["id"]: set(group["status_codes"]) for group in kanban_groups}
         all_statuses = []
-        for sts in status_map.values():
-            all_statuses.extend(list(sts))
+        for group in kanban_groups:
+            all_statuses.extend(group["status_codes"])
 
         base_filters = {
             "id": f_id,
@@ -275,14 +320,14 @@ class DashboardService:
             "aprovador": f_aprovador,
             "status": all_statuses
         }
-        if filtros.get("access_scope") is not None:
-            base_filters["access_scope"] = filtros.get("access_scope")
+        if access_scope is not None:
+            base_filters["access_scope"] = access_scope
         base_rows = self.erp_repo.buscar_kanban_base(base_filters)
         ids = [r["id"] for r in base_rows]
         ids_with_notes = self.local_repo.get_ticket_ids_with_notes(ids)
         assignees_by_ticket = self.local_repo.get_assignees_by_ticket_ids(ids)
 
-        kanban = {k: [] for k in status_map.keys()}
+        kanban = {group["id"]: [] for group in kanban_groups}
         for r in base_rows:
             tid = int(r["id"])
             item_tipo = classify_ticket(r["titulo"])
@@ -318,4 +363,7 @@ class DashboardService:
             }
             kanban[col_name].append(item)
 
-        return kanban
+        return {
+            "columns": kanban_groups,
+            "items": kanban,
+        }

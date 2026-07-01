@@ -9,6 +9,9 @@ TABLE_TICKET_ASSIGNEES = f"{LOCAL_SCHEMA}.chamados_ticket_assignees"
 TABLE_USERS = f"{LOCAL_SCHEMA}.chamados_users"
 TABLE_USER_DEPARTMENTS = f"{LOCAL_SCHEMA}.chamados_user_departments"
 TABLE_USER_SUBJECTS = f"{LOCAL_SCHEMA}.chamados_user_subjects"
+TABLE_USER_CHART_STATUSES = f"{LOCAL_SCHEMA}.chamados_user_chart_statuses"
+TABLE_USER_KANBAN_STATUSES = f"{LOCAL_SCHEMA}.chamados_user_kanban_statuses"
+TABLE_USER_KANBAN_COLUMN_ORDERS = f"{LOCAL_SCHEMA}.chamados_user_kanban_column_orders"
 
 def get_local_connection(_db_config=None):
     return psycopg2.connect(
@@ -74,10 +77,13 @@ def init_local_db(schema_name=None):
             display_name TEXT NOT NULL,
             profile TEXT NOT NULL DEFAULT 'subject',
             is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            chart_show_external BOOLEAN NOT NULL DEFAULT TRUE,
+            chart_show_internal BOOLEAN NOT NULL DEFAULT TRUE,
             last_login_at TIMESTAMP NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
     cur.execute(f"""
         CREATE TABLE IF NOT EXISTS {schema}.chamados_user_departments (
             user_id BIGINT NOT NULL REFERENCES {schema}.chamados_users(id) ON DELETE CASCADE,
@@ -94,6 +100,31 @@ def init_local_db(schema_name=None):
             descr_assunto TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (user_id, cod_assunto)
+        )
+    """)
+    cur.execute(f"""
+        CREATE TABLE IF NOT EXISTS {schema}.chamados_user_chart_statuses (
+            user_id BIGINT NOT NULL REFERENCES {schema}.chamados_users(id) ON DELETE CASCADE,
+            status_code TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, status_code)
+        )
+    """)
+    cur.execute(f"""
+        CREATE TABLE IF NOT EXISTS {schema}.chamados_user_kanban_statuses (
+            user_id BIGINT NOT NULL REFERENCES {schema}.chamados_users(id) ON DELETE CASCADE,
+            status_code TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, status_code)
+        )
+    """)
+    cur.execute(f"""
+        CREATE TABLE IF NOT EXISTS {schema}.chamados_user_kanban_column_orders (
+            user_id BIGINT NOT NULL REFERENCES {schema}.chamados_users(id) ON DELETE CASCADE,
+            column_id TEXT NOT NULL,
+            display_order INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, column_id)
         )
     """)
     conn.commit()

@@ -165,20 +165,34 @@
                             </div>
                         </div>
                         <div class="chart-item distribution-unified-chart">
-                            <h3 style="font-size: 0.95rem; color: #555; margin-bottom: 15px; text-align: center;">Distribuição & Tipos</h3>
+                            <h3 style="font-size: 0.95rem; color: #555; margin-bottom: 15px; text-align: center;">
+                                {% if access_scope and access_scope.chart_show_external and access_scope.chart_show_internal %}
+                                Distribuição & Tipos
+                                {% elif access_scope and access_scope.chart_show_external %}
+                                Distribuição
+                                {% elif access_scope and access_scope.chart_show_internal %}
+                                Tipos
+                                {% else %}
+                                Grafico da Dashboard
+                                {% endif %}
+                            </h3>
                             <div style="display: flex; flex-direction: column; align-items: center; gap: 15px;">
                                 <div class="chart-container" style="height: 160px; width: 160px; position: relative;">
                                     <canvas id="doubleDoughnutChart"></canvas>
                                 </div>
                                 <div style="width: 100%; max-height: 120px; overflow-y: auto; padding-right: 5px;">
+                                    {% if access_scope and access_scope.chart_show_external %}
                                     <div style="margin-bottom: 8px;">
                                         <span style="font-size: 0.65rem; font-weight: bold; color: #666; margin-bottom: 2px; display: block; border-left: 3px solid #1a73e8; padding-left: 5px;">STATUS (EXTERNO)</span>
                                         <ul id="stats-legend" class="stats-legend"></ul>
                                     </div>
-                                    <div>
+                                    {% endif %}
+                                    {% if access_scope and access_scope.chart_show_internal %}
+                                    <div id="type-legend-wrapper">
                                         <span style="font-size: 0.65rem; font-weight: bold; color: #666; margin-bottom: 2px; display: block; border-left: 3px solid #fbbc04; padding-left: 5px;">TIPO (INTERNO)</span>
                                         <ul id="type-legend" class="stats-legend"></ul>
                                     </div>
+                                    {% endif %}
                                 </div>
                             </div>
                         </div>
@@ -227,6 +241,8 @@
         let printLast = 0;
         let printTimer = null;
         let evolutionDateTimeTimer = null;
+        const SHOW_EXTERNAL_CHART = {{ (access_scope.chart_show_external if access_scope else true) | tojson }};
+        const SHOW_INTERNAL_CHART = {{ (access_scope.chart_show_internal if access_scope else true) | tojson }};
 
         function formatDashboardDateTime(date) {
             const d = date || new Date();
@@ -348,19 +364,25 @@
         });
 
                 const statusColors = {
+                    'Aguardando autorizacao': '#b1c18a',
                     'Aberta': '#c1f7c1',
-                    'Aguardando': '#b1c18a',
-                    'Andamento': '#c1e7ff',
-                    'Avaliação': '#fdfd96', 
-                    'RT': '#ffb347',
-                    'BA': '#d3d3d3', 'RJ': '#cccccc'
+                    'Em andamento': '#c1e7ff',
+                    'Aguardando avaliacao': '#fdfd96',
+                    'Programada': '#d7bde2',
+                    'Retrabalho': '#ffb347',
+                    'Encerrada': '#d3d3d3',
+                    'Rejeitada': '#cccccc'
                 };
 
                 const shortLabels = {
+                    'Aguardando autorizacao': 'AUT.',
                     'Aberta': 'AB.',
-                    'Aguardando': 'AG.',
-                    'Andamento': 'AN.',
-                    'Avaliação': 'AV.',
+                    'Em andamento': 'AND.',
+                    'Aguardando avaliacao': 'AVL.',
+                    'Programada': 'PROG.',
+                    'Retrabalho': 'RET.',
+                    'Encerrada': 'ENC.',
+                    'Rejeitada': 'REJ.',
                     'Incidente': 'INC.',
                     'Requisição': 'REQ.',
                     'BI': 'BI'
@@ -396,7 +418,8 @@
                         updateKpiLabels();
 
                         const labels = []; const values = []; const colors = [];
-                        data.detalhes.forEach(stat => {
+                        const externalStats = data.detalhes || [];
+                        externalStats.forEach(stat => {
                             const color = statusColors[stat.codigo] || '#eee';
                             if (!stat.ignorar_percentual) {
                                 labels.push(stat.descricao); 
@@ -406,14 +429,14 @@
                         });
                         
                         const legend = document.getElementById('stats-legend');
-                        if (legend) {
-                            legend.innerHTML = data.detalhes
-                                .filter(stat => ['Aberta', 'Aguardando', 'Andamento', 'Avaliação'].includes(stat.codigo))
+                        if (legend && SHOW_EXTERNAL_CHART) {
+                            legend.innerHTML = externalStats
                                 .map(stat => {
                                     const color = statusColors[stat.codigo] || '#eee';
                                     const short = shortLabels[stat.descricao] || stat.descricao;
+                                    const filterStatus = stat.filtro_status || '';
                                     return `
-                                        <li class="legend-item" onclick="abrirFiltroKPI('${stat.codigo}')" title="${stat.descricao}">
+                                        <li class="legend-item" onclick="abrirFiltroKPI('${filterStatus}')" title="${stat.descricao}">
                                             <div class="color-dot" style="background-color: ${color}"></div>
                                             <span class="label-full" style="flex-grow: 1; margin-right: 4px;">${stat.descricao}</span>
                                             <span class="label-short" style="flex-grow: 1; margin-right: 4px;">${short}</span>
@@ -421,15 +444,16 @@
                                             <span class="percent-label">${stat.percentual}%</span>
                                         </li>`;
                                 }).join('');
+                        } else if (legend) {
+                            legend.innerHTML = '';
                         }
                         
-                        // 1. Gráfico de Rosca Dupla (Status Externo, Tipo Interno)
                         const doubleCtx = document.getElementById('doubleDoughnutChart');
                         if (doubleCtx) {
                             if (doubleDoughnutChart) doubleDoughnutChart.destroy();
                             
                             const statusLabels = []; const statusValues = []; const statusColorsList = [];
-                            data.detalhes.filter(s => ['Aberta', 'Aguardando', 'Andamento', 'Avaliação'].includes(s.codigo)).forEach(s => {
+                            externalStats.forEach(s => {
                                 statusLabels.push(s.descricao); statusValues.push(s.quantidade); statusColorsList.push(statusColors[s.codigo]);
                             });
 
@@ -438,47 +462,61 @@
                             const reqPct = typeTotal > 0 ? Math.round((data.distribuicao_tipos.Requisição/typeTotal)*100) : 0;
                             const biPct = typeTotal > 0 ? (100 - incPct - reqPct) : 0;
 
-                            doubleDoughnutChart = new Chart(doubleCtx, {
-                                type: 'doughnut',
-                                data: {
-                                    datasets: [
-                                        {
-                                            label: 'Distribuição Atual',
-                                            data: statusValues,
-                                            backgroundColor: statusColorsList,
-                                            weight: 1
-                                        },
-                                        {
-                                            label: 'Tipo de Chamado',
-                                            data: [data.distribuicao_tipos.Incidente, data.distribuicao_tipos.Requisição, data.distribuicao_tipos.BI],
-                                            backgroundColor: ['#ea4335', '#4285f4', '#fbbc04'],
-                                            weight: 0.8
-                                        }
-                                    ]
-                                },
-                                options: {
-                                    responsive: true,
-                                    maintainAspectRatio: false,
-                                    plugins: { legend: { display: false } },
-                                    cutout: '40%',
-                                    onClick: (e, activeEls) => {
-                                        if (activeEls.length > 0) {
-                                            const idx = activeEls[0].index;
-                                            const datasetIdx = activeEls[0].datasetIndex;
-                                            if (datasetIdx === 0) {
-                                                const filteredStats = data.detalhes.filter(s => ['Aberta', 'Aguardando', 'Andamento', 'Avaliação'].includes(s.codigo));
-                                                if (filteredStats[idx]) abrirFiltroKPI(filteredStats[idx].codigo);
-                                            } else {
-                                                const tipos = ['Incidente', 'Requisição', 'BI'];
-                                                abrirFiltroTipo(tipos[idx]);
+                            const datasets = [];
+                            if (SHOW_EXTERNAL_CHART) {
+                                datasets.push({
+                                    label: 'Distribuição Atual',
+                                    data: statusValues,
+                                    backgroundColor: statusColorsList,
+                                    weight: 1
+                                });
+                            }
+
+                            if (SHOW_INTERNAL_CHART) {
+                                datasets.push({
+                                    label: 'Tipo de Chamado',
+                                    data: [data.distribuicao_tipos.Incidente, data.distribuicao_tipos.Requisição, data.distribuicao_tipos.BI],
+                                    backgroundColor: ['#ea4335', '#4285f4', '#fbbc04'],
+                                    weight: SHOW_EXTERNAL_CHART ? 0.8 : 1
+                                });
+                            }
+
+                            if (datasets.length === 0) {
+                                const ctx = doubleCtx.getContext('2d');
+                                ctx.clearRect(0, 0, doubleCtx.width, doubleCtx.height);
+                            } else {
+                                doubleDoughnutChart = new Chart(doubleCtx, {
+                                    type: 'doughnut',
+                                    data: {
+                                        labels: statusLabels,
+                                        datasets
+                                    },
+                                    options: {
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: { legend: { display: false } },
+                                        cutout: (SHOW_EXTERNAL_CHART && SHOW_INTERNAL_CHART) ? '40%' : '58%',
+                                        onClick: (e, activeEls) => {
+                                            if (activeEls.length > 0) {
+                                                const idx = activeEls[0].index;
+                                                const datasetIdx = activeEls[0].datasetIndex;
+                                                if (SHOW_EXTERNAL_CHART && datasetIdx === 0) {
+                                                    if (externalStats[idx]) abrirFiltroKPI(externalStats[idx].filtro_status || '');
+                                                } else if (SHOW_INTERNAL_CHART) {
+                                                    const internalDatasetIndex = SHOW_EXTERNAL_CHART ? 1 : 0;
+                                                    if (datasetIdx === internalDatasetIndex) {
+                                                        const tipos = ['Incidente', 'Requisição', 'BI'];
+                                                        abrirFiltroTipo(tipos[idx]);
+                                                    }
+                                                }
                                             }
                                         }
                                     }
-                                }
-                            });
+                                });
+                            }
 
                             const typeLegend = document.getElementById('type-legend');
-                            if (typeLegend) {
+                            if (SHOW_INTERNAL_CHART && typeLegend) {
                                 typeLegend.classList.add('type-legend-grid');
                                 typeLegend.innerHTML = `
                                     <li class="legend-item" onclick="abrirFiltroTipo('Incidente')" title="Incidente">
@@ -503,6 +541,8 @@
                                         <span class="percent-label">${biPct}%</span>
                                     </li>
                                 `;
+                            } else if (typeLegend) {
+                                typeLegend.innerHTML = '';
                             }
                         }
 

@@ -1,23 +1,13 @@
 from database.erp_connection import get_erp_connection
 from utils.datetime_utils import format_erp_date, format_erp_time, erp_to_datetime
 from utils.classifier import classify_ticket
+from utils.dashboard_statuses import STATUS_BY_CODE
 from utils.text_utils import extract_approver_from_text
 import os
 
 class ERPRepository:
     def __init__(self):
-        self.status_map = {
-            'AA': 'Aguardando autorização',
-            'IM': 'Aberta',
-            'AB': 'Aberta',
-            'EA': 'Em andamento',
-            'AN': 'Em andamento',
-            'AV': 'Aguardando avaliação',
-            'PR': 'Programada',
-            'RT': 'Retrabalho',
-            'BA': 'Encerrada',
-            'RJ': 'Rejeitada'
-        }
+        self.status_map = {code: item["label"] for code, item in STATUS_BY_CODE.items()}
         raw_default = os.getenv("DEFAULT_SUBJECT_CODES", "")
         self.default_subject_codes = [
             int(part.strip())
@@ -329,13 +319,7 @@ class ERPRepository:
         scope_condition, scope_params = self._scope_assunto_condition("DM1744.COD_ASSUNTO", access_scope)
         cur.execute(f"""
             SELECT 
-                CASE 
-                    WHEN DM1744.COD_STATUS_DOC IN ('EA', 'AN') THEN 'Andamento'
-                    WHEN DM1744.COD_STATUS_DOC = 'AV' THEN 'Avaliação'
-                    WHEN DM1744.COD_STATUS_DOC = 'AA' THEN 'Aguardando'
-                    WHEN DM1744.COD_STATUS_DOC IN ('IM', 'AB') THEN 'Aberta'
-                    ELSE DM1744.COD_STATUS_DOC
-                END as categoria,
+                COALESCE(DM1744.COD_STATUS_DOC, '') as categoria,
                 COUNT(*) as quantidade
             FROM BANCO01.DM1744 
             WHERE {scope_condition}

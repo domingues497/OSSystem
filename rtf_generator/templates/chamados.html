@@ -26,17 +26,6 @@
             </div>
 
             <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end;">
-                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; background: #fff; border: 1px solid #dbe5f4; border-radius: 10px;">
-                    <span style="font-size: 0.85rem; font-weight: 700; color: #1f2937;">{{ current_user.display_name if current_user else '' }}</span>
-                    {% if access_scope and access_scope.is_admin %}
-                    <span style="font-size: 0.75rem; background: #e8f0fe; color: #1a73e8; padding: 3px 8px; border-radius: 999px; font-weight: 700;">Administrador</span>
-                    {% else %}
-                    <span style="font-size: 0.75rem; background: #eef6ec; color: #2e7d32; padding: 3px 8px; border-radius: 999px; font-weight: 700;">
-                        {{ (access_scope.subject_names | join(', ')) if access_scope and access_scope.subject_names else 'Assuntos' }}
-                    </span>
-                    {% endif %}
-                    <a href="/logout" style="text-decoration: none; font-size: 0.8rem; color: #c62828; font-weight: 700;">Sair</a>
-                </div>
                 <div class="filter-bar" style="margin: 0; padding: 5px 12px; background: #f8faff; border-radius: 10px; border: 1px solid #e1e8f5; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                     <div class="refresh-group" style="border-right: 1px solid #ddd; padding-right: 10px; margin-right: 5px; display: flex; align-items: center; gap: 5px;">
                         <i class="fas fa-sync-alt" style="font-size: 0.8rem; color: #666;" title="Atualização Automática"></i>
@@ -62,6 +51,15 @@
                     <button type="button" class="btn" onclick="carregarKanban()" style="padding: 4px 12px; font-size: 0.8rem; background: #5f6368; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">
                         <i class="fas fa-sync-alt"></i> Kanban
                     </button>
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; background: #fff; border: 1px solid #dbe5f4; border-radius: 10px;">
+                    <span style="font-size: 0.85rem; font-weight: 700; color: #1f2937;">{{ current_user.display_name if current_user else '' }}</span>
+                    {% if access_scope and access_scope.is_admin %}
+                    <span style="font-size: 0.75rem; background: #e8f0fe; color: #1a73e8; padding: 3px 8px; border-radius: 999px; font-weight: 700;">Administrador</span>
+                    {% else %}
+                    {% endif %}
+                    <a href="/logout" style="text-decoration: none; font-size: 0.8rem; color: #c62828; font-weight: 700;">Sair</a>
+                </div>
+
                 </div>
             </div>
         </div>
@@ -169,22 +167,10 @@
             <h2 style="font-size: 1.2rem; color: #444; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px;">
                 <i class="fas fa-tasks"></i> Quadro Kanban - Fluxo Operacional
             </h2>
-            <div class="kanban-board">
-                <div class="kanban-column" id="col-aberta">
+            <div class="kanban-board" id="kanban-board">
+                <div class="kanban-column" id="col-aguardando" data-column-id="aguardando">
                     <div class="kanban-header">
-                        <span>ABERTA</span>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <button class="btn-sort" onclick="toggleSort('aberta')" title="Inverter Ordem">
-                                <i class="fas fa-sort" id="sort-icon-aberta"></i>
-                            </button>
-                            <span class="kanban-count" id="count-aberta">0</span>
-                        </div>
-                    </div>
-                    <div class="kanban-cards" id="cards-aberta"></div>
-                </div>
-                <div class="kanban-column" id="col-aguardando">
-                    <div class="kanban-header">
-                        <span>AGUARDANDO</span>
+                        <span>AGUARDANDO AUTORIZACAO</span>
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <button class="btn-sort" onclick="toggleAguardandoOrderMode()" title="Alternar ordenação (Cor/Data)">
                                 <i class="fas fa-palette" id="sort-mode-aguardando"></i>
@@ -198,9 +184,21 @@
                     <div class="kanban-organizer" id="organizer-aguardando"></div>
                     <div class="kanban-cards" id="cards-aguardando"></div>
                 </div>
-                <div class="kanban-column" id="col-andamento">
+                <div class="kanban-column" id="col-aberta" data-column-id="aberta">
                     <div class="kanban-header">
-                        <span>ANDAMENTO</span>
+                        <span>ABERTA</span>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <button class="btn-sort" onclick="toggleSort('aberta')" title="Inverter Ordem">
+                                <i class="fas fa-sort" id="sort-icon-aberta"></i>
+                            </button>
+                            <span class="kanban-count" id="count-aberta">0</span>
+                        </div>
+                    </div>
+                    <div class="kanban-cards" id="cards-aberta"></div>
+                </div>
+                <div class="kanban-column" id="col-andamento" data-column-id="andamento">
+                    <div class="kanban-header">
+                        <span>EM ANDAMENTO</span>
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <button class="btn-sort" onclick="toggleSort('andamento')" title="Inverter Ordem">
                                 <i class="fas fa-sort" id="sort-icon-andamento"></i>
@@ -211,9 +209,9 @@
                     <div class="kanban-organizer" id="organizer-andamento"></div>
                     <div class="kanban-cards" id="cards-andamento"></div>
                 </div>
-                <div class="kanban-column" id="col-avaliacao">
+                <div class="kanban-column" id="col-avaliacao" data-column-id="avaliacao">
                     <div class="kanban-header">
-                        <span>AVALIAÇÃO</span>
+                        <span>AGUARDANDO AVALIACAO</span>
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <button class="btn-sort" onclick="toggleSort('avaliacao')" title="Inverter Ordem">
                                 <i class="fas fa-sort" id="sort-icon-avaliacao"></i>
@@ -223,17 +221,53 @@
                     </div>
                     <div class="kanban-cards" id="cards-avaliacao"></div>
                 </div>
-                <div class="kanban-column" id="col-encerrados">
+                <div class="kanban-column" id="col-programada" data-column-id="programada">
                     <div class="kanban-header">
-                        <span>ENCERRADOS</span>
+                        <span>PROGRAMADA</span>
                         <div style="display: flex; align-items: center; gap: 10px;">
-                            <button class="btn-sort" onclick="toggleSort('encerrados')" title="Inverter Ordem">
-                                <i class="fas fa-sort" id="sort-icon-encerrados"></i>
+                            <button class="btn-sort" onclick="toggleSort('programada')" title="Inverter Ordem">
+                                <i class="fas fa-sort" id="sort-icon-programada"></i>
                             </button>
-                            <span class="kanban-count" id="count-encerrados">0</span>
+                            <span class="kanban-count" id="count-programada">0</span>
                         </div>
                     </div>
-                    <div class="kanban-cards" id="cards-encerrados"></div>
+                    <div class="kanban-cards" id="cards-programada"></div>
+                </div>
+                <div class="kanban-column" id="col-retrabalho" data-column-id="retrabalho">
+                    <div class="kanban-header">
+                        <span>RETRABALHO</span>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <button class="btn-sort" onclick="toggleSort('retrabalho')" title="Inverter Ordem">
+                                <i class="fas fa-sort" id="sort-icon-retrabalho"></i>
+                            </button>
+                            <span class="kanban-count" id="count-retrabalho">0</span>
+                        </div>
+                    </div>
+                    <div class="kanban-cards" id="cards-retrabalho"></div>
+                </div>
+                <div class="kanban-column" id="col-encerrada" data-column-id="encerrada">
+                    <div class="kanban-header">
+                        <span>ENCERRADA</span>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <button class="btn-sort" onclick="toggleSort('encerrada')" title="Inverter Ordem">
+                                <i class="fas fa-sort" id="sort-icon-encerrada"></i>
+                            </button>
+                            <span class="kanban-count" id="count-encerrada">0</span>
+                        </div>
+                    </div>
+                    <div class="kanban-cards" id="cards-encerrada"></div>
+                </div>
+                <div class="kanban-column" id="col-rejeitada" data-column-id="rejeitada">
+                    <div class="kanban-header">
+                        <span>REJEITADA</span>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <button class="btn-sort" onclick="toggleSort('rejeitada')" title="Inverter Ordem">
+                                <i class="fas fa-sort" id="sort-icon-rejeitada"></i>
+                            </button>
+                            <span class="kanban-count" id="count-rejeitada">0</span>
+                        </div>
+                    </div>
+                    <div class="kanban-cards" id="cards-rejeitada"></div>
                 </div>
             </div>
         </div>
@@ -252,6 +286,10 @@
 
     <script>
         const ACCESS_SCOPE = {{ access_scope | tojson }};
+        const VISIBLE_KANBAN_COLUMNS = {{ (access_scope.kanban_column_ids if access_scope else []) | tojson }};
+        const ALL_KANBAN_COLUMNS = ['aguardando', 'aberta', 'andamento', 'avaliacao', 'programada', 'retrabalho', 'encerrada', 'rejeitada'];
+        let currentColumnOrder = [...VISIBLE_KANBAN_COLUMNS];
+        let draggedColumnId = '';
         let selectedStatuses = [];
         let refreshTimer = null;
         let hasLoadedKanban = false;
@@ -266,11 +304,14 @@
         
         // Configurações do Kanban
         let kanbanSort = {
-            aberta: localStorage.getItem('dash-sort-aberta') || 'desc',
             aguardando: localStorage.getItem('dash-sort-aguardando') || 'desc',
+            aberta: localStorage.getItem('dash-sort-aberta') || 'desc',
             andamento: localStorage.getItem('dash-sort-andamento') || 'desc',
             avaliacao: localStorage.getItem('dash-sort-avaliacao') || 'desc',
-            encerrados: localStorage.getItem('dash-sort-encerrados') || 'desc'
+            programada: localStorage.getItem('dash-sort-programada') || 'desc',
+            retrabalho: localStorage.getItem('dash-sort-retrabalho') || 'desc',
+            encerrada: localStorage.getItem('dash-sort-encerrada') || 'desc',
+            rejeitada: localStorage.getItem('dash-sort-rejeitada') || 'desc'
         };
         let aguardandoOrderMode = localStorage.getItem('dash-aguardando-order') || 'cor';
         let lastKanbanData = null;
@@ -341,6 +382,83 @@
             }[char]));
         }
 
+        function applyKanbanColumnOrderToDom() {
+            const board = document.getElementById('kanban-board');
+            if (!board) return;
+            currentColumnOrder.forEach(columnId => {
+                const columnEl = document.getElementById(`col-${columnId}`);
+                if (columnEl) board.appendChild(columnEl);
+            });
+        }
+
+        async function persistKanbanColumnOrder() {
+            try {
+                await fetch('/api/erp/kanban_column_order', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ column_ids: currentColumnOrder })
+                });
+            } catch (e) {
+                console.error('Erro ao salvar ordem do kanban', e);
+            }
+        }
+
+        function setupKanbanColumnDnD() {
+            const board = document.getElementById('kanban-board');
+            if (!board) return;
+            document.querySelectorAll('.kanban-column').forEach(column => {
+                const columnId = column.dataset.columnId || '';
+                const visible = currentColumnOrder.includes(columnId);
+                column.draggable = visible;
+                column.style.cursor = visible ? 'grab' : '';
+                column.ondragstart = (event) => {
+                    if (!visible) {
+                        event.preventDefault();
+                        return;
+                    }
+                    draggedColumnId = columnId;
+                    column.style.opacity = '0.55';
+                    if (event.dataTransfer) {
+                        event.dataTransfer.effectAllowed = 'move';
+                        event.dataTransfer.setData('text/plain', columnId);
+                    }
+                };
+                column.ondragend = () => {
+                    draggedColumnId = '';
+                    document.querySelectorAll('.kanban-column').forEach(item => {
+                        item.style.opacity = '';
+                        item.style.boxShadow = '';
+                    });
+                };
+                column.ondragover = (event) => {
+                    if (!draggedColumnId || draggedColumnId === columnId || !visible) return;
+                    event.preventDefault();
+                    column.style.boxShadow = '0 0 0 2px rgba(26,115,232,0.35)';
+                };
+                column.ondragleave = () => {
+                    column.style.boxShadow = '';
+                };
+                column.ondrop = async (event) => {
+                    if (!draggedColumnId || draggedColumnId === columnId || !visible) return;
+                    event.preventDefault();
+                    column.style.boxShadow = '';
+                    const sourceIndex = currentColumnOrder.indexOf(draggedColumnId);
+                    const targetIndex = currentColumnOrder.indexOf(columnId);
+                    if (sourceIndex < 0 || targetIndex < 0) return;
+                    const nextOrder = [...currentColumnOrder];
+                    const [moved] = nextOrder.splice(sourceIndex, 1);
+                    nextOrder.splice(targetIndex, 0, moved);
+                    currentColumnOrder = nextOrder;
+                    applyKanbanColumnOrderToDom();
+                    setupKanbanColumnDnD();
+                    await persistKanbanColumnOrder();
+                };
+            });
+            board.ondragover = (event) => {
+                if (draggedColumnId) event.preventDefault();
+            };
+        }
+
         function applyInitialSettings() {
             localStorage.removeItem('chamados-only-approved');
 
@@ -354,9 +472,11 @@
 
             updateTvModeButton();
             if (tvModeEnabled) requestWakeLock();
+            applyKanbanColumnOrderToDom();
+            setupKanbanColumnDnD();
 
             // Aplicar ícones de ordenação iniciais
-            ['aberta', 'aguardando', 'andamento', 'avaliacao', 'encerrados'].forEach(col => {
+            ALL_KANBAN_COLUMNS.forEach(col => {
                 const icon = document.getElementById(`sort-icon-${col}`);
                 if (icon) {
                     icon.className = kanbanSort[col] === 'desc' ? 'fas fa-sort-amount-down' : 'fas fa-sort-amount-up';
@@ -749,10 +869,12 @@
         function renderTodasColunas() {
             if (!lastKanbanData) return;
             currentKanbanView = {};
-            const cols = ['aberta', 'aguardando', 'andamento', 'avaliacao'];
-            if (lastKanbanData.encerrados) cols.push('encerrados');
+            const kanbanItems = lastKanbanData.items || lastKanbanData;
+            const cols = (lastKanbanData.columns || []).map(col => col.id);
+            currentColumnOrder = cols.length ? [...cols] : (VISIBLE_KANBAN_COLUMNS.length ? [...VISIBLE_KANBAN_COLUMNS] : [...ALL_KANBAN_COLUMNS]);
+            applyKanbanColumnOrderToDom();
             cols.forEach(col => {
-                let baseTickets = [...lastKanbanData[col]];
+                let baseTickets = [...(kanbanItems[col] || [])];
                 if (onlyApproved) {
                     baseTickets = baseTickets.filter(t => {
                         const req = parseInt(t.auth_req_count || 0);
@@ -801,8 +923,11 @@
                 currentKanbanView[col] = [...tickets];
                 renderKanbanColumn(col, tickets, baseTickets);
             });
-            const encerradosCol = document.getElementById('col-encerrados');
-            if (encerradosCol) encerradosCol.style.display = lastKanbanData.encerrados ? 'flex' : 'none';
+            ALL_KANBAN_COLUMNS.forEach(col => {
+                const colEl = document.getElementById(`col-${col}`);
+                if (colEl) colEl.style.display = cols.includes(col) ? 'flex' : 'none';
+            });
+            setupKanbanColumnDnD();
             refreshModalNavigationIndicator();
         }
 
@@ -940,11 +1065,14 @@
             const nav = getModalNavigationState(columnId, ticketId);
             if (!nav.tickets.length || nav.index < 0) return '';
             const columnTitles = {
+                aguardando: 'AGUARDANDO AUTORIZACAO',
                 aberta: 'ABERTA',
-                aguardando: 'AGUARDANDO',
-                andamento: 'ANDAMENTO',
-                avaliacao: 'AVALIAÇÃO',
-                encerrados: 'ENCERRADOS'
+                andamento: 'EM ANDAMENTO',
+                avaliacao: 'AGUARDANDO AVALIACAO',
+                programada: 'PROGRAMADA',
+                retrabalho: 'RETRABALHO',
+                encerrada: 'ENCERRADA',
+                rejeitada: 'REJEITADA'
             };
             const movedOut = !isTicketStillInCurrentColumn(columnId, ticketId);
             return `

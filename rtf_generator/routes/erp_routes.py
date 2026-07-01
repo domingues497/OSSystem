@@ -1,12 +1,13 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 from time import perf_counter
+from repositories.local_auth_repository import LocalAuthRepository
 from repositories.erp_repository import ERPRepository
 from repositories.local_note_repository import LocalNoteRepository
 from services.chamado_service import ChamadoService
 from services.dashboard_service import DashboardService
 from services.produtividade_service import ProdutividadeService
 from config import Config
-from utils.auth_utils import get_access_scope
+from utils.auth_utils import get_access_scope, get_current_user, store_user_session
 
 erp_bp = Blueprint('erp', __name__)
 erp_repo = ERPRepository()
@@ -15,6 +16,13 @@ local_repo = LocalNoteRepository(Config.LOCAL_DB)
 chamado_service = ChamadoService(erp_repo, local_repo)
 dashboard_service = DashboardService(erp_repo, local_repo)
 produtividade_service = ProdutividadeService(erp_repo)
+
+
+def _get_auth_repo():
+    repo = current_app.extensions.get("local_auth_repo")
+    if repo:
+        return repo
+    return LocalAuthRepository(Config.LOCAL_DB)
 
 @erp_bp.route('/assuntos')
 def get_assuntos():
@@ -93,6 +101,26 @@ def get_kanban():
     }
     data = dashboard_service.obter_kanban(filtros)
     return jsonify(data)
+
+
+@erp_bp.route('/kanban_column_order', methods=['POST'])
+def save_kanban_column_order():
+    user = get_current_user()
+    if not user:
+        return jsonify({"error": "Sessao expirada. Faca login novamente."}), 401
+
+    payload = request.get_json(silent=True) or {}
+    column_ids = payload.get("column_ids") or []
+    auth_repo = _get_auth_repo()
+    auth_repo.replace_user_kanban_column_order(
+        user["id"],
+        column_ids,
+        user.get("kanban_status_codes"),
+    )
+    refreshed_user = auth_repo.get_user_with_subjects(user["id"])
+    if refreshed_user:
+        store_user_session(refreshed_user)
+    return jsonify({"ok": True})
 
 @erp_bp.route('/chamados_pendentes')
 def get_chamados_pendentes():

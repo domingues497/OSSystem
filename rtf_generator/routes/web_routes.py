@@ -4,6 +4,7 @@ import os
 import re
 from config import Config
 from repositories.local_auth_repository import LocalAuthRepository
+from utils.dashboard_statuses import normalize_dashboard_status_codes
 from utils.auth_utils import (
     admin_required,
     clear_user_session,
@@ -49,6 +50,21 @@ def _parse_subjects_from_form(auth_repo, form):
         {"cod_assunto": code, "descr_assunto": subject_map.get(code, "")}
         for code in selected_codes
     ]
+
+
+def _parse_chart_flags_from_form(form):
+    return {
+        "show_external": (form.get("chart_show_external") or "").strip().lower() in {"1", "true", "on", "yes"},
+        "show_internal": (form.get("chart_show_internal") or "").strip().lower() in {"1", "true", "on", "yes"},
+    }
+
+
+def _parse_chart_status_codes_from_form(form):
+    return normalize_dashboard_status_codes(form.getlist("chart_status_codes"))
+
+
+def _parse_kanban_status_codes_from_form(form):
+    return normalize_dashboard_status_codes(form.getlist("kanban_status_codes"))
 
 def extract_fields(filepath):
     with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
@@ -146,12 +162,19 @@ def manage_users():
                 confirm_password = request.form.get("confirm_password") or ""
                 profile = (request.form.get("profile") or "subject").strip().lower()
                 subjects = _parse_subjects_from_form(auth_repo, request.form)
+                chart_flags = _parse_chart_flags_from_form(request.form)
+                chart_status_codes = _parse_chart_status_codes_from_form(request.form)
+                kanban_status_codes = _parse_kanban_status_codes_from_form(request.form)
                 is_active = (request.form.get("is_active") or "").strip().lower() in {"1", "true", "on", "yes"}
 
                 if password != confirm_password:
                     raise ValueError("As senhas nao conferem.")
                 if profile != "admin" and not subjects:
                     raise ValueError("Selecione pelo menos um assunto para o usuario.")
+                if chart_flags["show_external"] and not chart_status_codes:
+                    raise ValueError("Selecione pelo menos um status para o grafico externo.")
+                if not kanban_status_codes:
+                    raise ValueError("Selecione pelo menos um status para o kanban.")
 
                 auth_repo.create_user(
                     username=username,
@@ -160,6 +183,9 @@ def manage_users():
                     profile=profile,
                     subjects=subjects,
                     is_active=is_active,
+                    chart_flags=chart_flags,
+                    chart_status_codes=chart_status_codes,
+                    kanban_status_codes=kanban_status_codes,
                 )
                 success = "Usuario cadastrado com sucesso."
 
@@ -170,9 +196,16 @@ def manage_users():
                 password = request.form.get("password") or ""
                 is_active = (request.form.get("is_active") or "").strip().lower() in {"1", "true", "on", "yes"}
                 subjects = _parse_subjects_from_form(auth_repo, request.form)
+                chart_flags = _parse_chart_flags_from_form(request.form)
+                chart_status_codes = _parse_chart_status_codes_from_form(request.form)
+                kanban_status_codes = _parse_kanban_status_codes_from_form(request.form)
 
                 if profile != "admin" and not subjects:
                     raise ValueError("Selecione pelo menos um assunto para o usuario.")
+                if chart_flags["show_external"] and not chart_status_codes:
+                    raise ValueError("Selecione pelo menos um status para o grafico externo.")
+                if not kanban_status_codes:
+                    raise ValueError("Selecione pelo menos um status para o kanban.")
 
                 auth_repo.update_user(
                     user_id=user_id,
@@ -181,6 +214,9 @@ def manage_users():
                     is_active=is_active,
                     password=password or None,
                     subjects=subjects,
+                    chart_flags=chart_flags,
+                    chart_status_codes=chart_status_codes,
+                    kanban_status_codes=kanban_status_codes,
                 )
                 success = "Usuario atualizado com sucesso."
             else:
@@ -193,6 +229,8 @@ def manage_users():
         error=error,
         success=success,
         available_subjects=auth_repo.list_available_subjects(),
+        available_chart_statuses=auth_repo.list_available_chart_statuses(),
+        available_kanban_statuses=auth_repo.list_available_kanban_statuses(),
         managed_users=auth_repo.list_users_with_subjects(),
     )
 
