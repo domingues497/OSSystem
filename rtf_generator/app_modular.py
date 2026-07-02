@@ -18,7 +18,7 @@ from routes.web_routes import web_bp
 from database.local_connection import init_local_db
 from repositories.local_access_repository import LocalAccessRepository
 from repositories.local_auth_repository import LocalAuthRepository
-from utils.auth_utils import is_logged_in, unauthorized_response
+from utils.auth_utils import get_current_user, is_logged_in, unauthorized_response
 
 _access_report_scheduler_started = False
 
@@ -121,13 +121,18 @@ def create_app():
             xff = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
             ip = xff or (request.remote_addr or "")
             ua = request.headers.get("User-Agent") or ""
+            current_user = get_current_user() or {}
+            username = str(current_user.get("username") or "").strip()
+            display_name = str(current_user.get("display_name") or "").strip()
+            user_label = display_name or username or "-"
+            user_label = user_label.replace("|", "/")
             
             # Log de acesso em arquivo de texto
             log_path = os.path.join(app.root_path, "access.log")
             from datetime import datetime
             now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             with open(log_path, "a", encoding="utf-8") as f:
-                f.write(f"{now_str}|{ip}|{p}|{ua}\n")
+                f.write(f"{now_str}|{ip}|{p}|{ua}|{user_label}\n")
         except Exception as e:
             app.logger.error(f"Erro ao gravar access.log: {e}")
             return

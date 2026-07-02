@@ -19,6 +19,13 @@ def _format_br_dt_yy_hhmm(dt_str):
     except Exception:
         return ""
 
+
+def _clean_log_user(raw_user):
+    value = str(raw_user or "").strip()
+    if not value or value == "-":
+        return ""
+    return value.replace("|", "/")
+
 def _access_log_path():
     return os.path.join(os.path.dirname(os.path.dirname(__file__)), "access.log")
 
@@ -95,10 +102,13 @@ def run_access_report_job(force=False, dry_run=False):
                     total_requests += 1
                     if not last_access_raw or dt_str > last_access_raw:
                         last_access_raw = dt_str
+                    user_label = _clean_log_user(parts[4] if len(parts) >= 5 else "")
                     if ip not in ips_data:
-                        ips_data[ip] = {"count": 0, "last_seen": ""}
+                        ips_data[ip] = {"count": 0, "last_seen": "", "users": []}
                     ips_data[ip]["count"] += 1
                     ips_data[ip]["last_seen"] = dt_str
+                    if user_label and user_label not in ips_data[ip]["users"]:
+                        ips_data[ip]["users"].append(user_label)
 
         uniq = len(ips_data)
         if uniq == 0:
@@ -120,7 +130,9 @@ def run_access_report_job(force=False, dry_run=False):
             cnt = data["count"]
             last_seen = data["last_seen"]
             last_hhmm = last_seen[11:16] if len(last_seen) >= 16 else ""
-            lines.append(f"- {ip} ({cnt}) {last_hhmm}".rstrip())
+            users = ", ".join(data.get("users") or [])
+            user_suffix = f" | Usuario: {users}" if users else ""
+            lines.append(f"- {ip} ({cnt}) {last_hhmm}{user_suffix}".rstrip())
 
         if uniq > max_ips:
             lines.append(f"... +{uniq - max_ips} IPs")
