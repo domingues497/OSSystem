@@ -16,34 +16,33 @@ if [ -f "$DEPLOY_ENV" ]; then
   . "$DEPLOY_ENV"
 fi
 
-# Se houver token configurado, usa GIT_ASKPASS para autenticação HTTPS
-# sem gravar o segredo no script ou no comando.
-ASKPASS_FILE=""
-cleanup() {
-  if [ -n "${ASKPASS_FILE:-}" ] && [ -f "$ASKPASS_FILE" ]; then
-    rm -f "$ASKPASS_FILE"
-  fi
+# Normaliza valores carregados do arquivo para evitar problemas com CRLF
+# ou espacos acidentais no inicio/fim.
+trim_var() {
+  printf '%s' "$1" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
 }
-trap cleanup EXIT
+GITHUB_USERNAME="$(trim_var "${GITHUB_USERNAME:-}")"
+GITHUB_TOKEN="$(trim_var "${GITHUB_TOKEN:-}")"
 
-if [ -n "${GITHUB_TOKEN:-}" ]; then
-  export GIT_TERMINAL_PROMPT=0
-  export GITHUB_USERNAME="${GITHUB_USERNAME:-domingues497}"
-  ASKPASS_FILE="$(mktemp)"
-  cat >"$ASKPASS_FILE" <<'EOF'
-#!/usr/bin/env sh
-case "$1" in
-  *Username*) printf '%s\n' "${GITHUB_USERNAME:-domingues497}" ;;
-  *Password*) printf '%s\n' "${GITHUB_TOKEN:-}" ;;
-  *) printf '\n' ;;
-esac
-EOF
-  chmod 700 "$ASKPASS_FILE"
-  export GIT_ASKPASS="$ASKPASS_FILE"
+if [ -n "${GITHUB_TOKEN:-}" ] && [ -z "${GITHUB_USERNAME:-}" ]; then
+  GITHUB_USERNAME="domingues497"
+fi
+
+if [ -f "$DEPLOY_ENV" ] && { [ -z "${GITHUB_USERNAME:-}" ] || [ -z "${GITHUB_TOKEN:-}" ]; }; then
+  echo "Erro: arquivo $DEPLOY_ENV encontrado, mas as variáveis não foram carregadas corretamente."
+  echo "Use exatamente:"
+  echo "  GITHUB_USERNAME=domingues497"
+  echo "  GITHUB_TOKEN=seu_token"
+  exit 1
 fi
 
 cd /opt/rtf_generator
-git pull --ff-only
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+  AUTH_B64="$(printf '%s' "${GITHUB_USERNAME}:${GITHUB_TOKEN}" | base64 | tr -d '\n\r')"
+  git -c credential.helper= -c http.extraHeader="AUTHORIZATION: basic ${AUTH_B64}" pull --ff-only
+else
+  git pull --ff-only
+fi
 
 cd /opt/rtf_generator/rtf_generator
 if [ ! -d "venv" ]; then
