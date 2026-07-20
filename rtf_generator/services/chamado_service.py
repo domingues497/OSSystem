@@ -316,6 +316,8 @@ class ChamadoService:
             mm = int((h_val - hh) * 100)
             ss = int(((h_val - hh) * 100 - mm) * 100)
             d['hora_cad_fmt'] = f"{hh:02d}:{mm:02d}:{ss:02d}"
+            d['data_cad_fmt'] = format_erp_date(d['data_cad'])
+            d['data_cad_display'] = f"{d['data_cad_fmt']} {hh:02d}:{mm:02d}"
             
             dt_str = str(d['data_cad'])
             d['data_cad_iso'] = f"{dt_str[0:4]}-{dt_str[4:6]}-{dt_str[6:8]}"

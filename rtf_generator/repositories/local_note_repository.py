@@ -3,6 +3,7 @@ from database.local_connection import (
     TABLE_TICKET_ASSIGNEES,
     get_local_connection,
 )
+from utils.datetime_utils import format_display_datetime
 
 class LocalNoteRepository:
     def __init__(self, db_path):
@@ -27,7 +28,7 @@ class LocalNoteRepository:
         )
         rows = cur.fetchall()
         conn.close()
-        return [{"note": r[0], "created_at": r[1]} for r in rows]
+        return [{"note": r[0], "created_at": format_display_datetime(r[1])} for r in rows]
 
     def get_ticket_ids_with_notes(self, ticket_ids):
         if not ticket_ids: return set()

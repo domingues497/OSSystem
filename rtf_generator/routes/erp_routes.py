@@ -122,6 +122,29 @@ def save_kanban_column_order():
         store_user_session(refreshed_user)
     return jsonify({"ok": True})
 
+
+@erp_bp.route('/chamados_filter_preferences', methods=['POST'])
+def save_chamados_filter_preferences():
+    user = get_current_user()
+    if not user:
+        return jsonify({"error": "Sessao expirada. Faca login novamente."}), 401
+
+    payload = request.get_json(silent=True) or {}
+    filter_ids = payload.get("filter_ids") or []
+    auth_repo = _get_auth_repo()
+    auth_repo.replace_user_chamados_filter_ids(
+        user["id"],
+        filter_ids,
+        profile=user.get("profile"),
+    )
+    refreshed_user = auth_repo.get_user_with_subjects(user["id"])
+    if refreshed_user:
+        store_user_session(refreshed_user)
+    return jsonify({
+        "ok": True,
+        "filter_ids": refreshed_user.get("chamados_filter_ids") if refreshed_user else filter_ids,
+    })
+
 @erp_bp.route('/chamados_pendentes')
 def get_chamados_pendentes():
     t0 = perf_counter()

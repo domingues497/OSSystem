@@ -9,7 +9,7 @@ def classify_ticket(titulo, descricao=""):
     
     bi_patterns = [
         r'\bBI\b', r'\bB\.I\b', r'\bQLIK\b', r'\bQLIKVIEW\b', r'\bQLIKSENSE\b', 
-        r'\bDASHBOARD\b', r'\bPOWER BI\b', r'\bPOWERBI\b', r'\bDATASET\b'
+        r'\bDASHBOARD\b', r'\bPOWER BI\b', r'\bPOWERBI\b', r'\bDATASET\b', r'\bBEAY\b'
     ]
     if any(re.search(p, text) for p in bi_patterns):
         return "BI"

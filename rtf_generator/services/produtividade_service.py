@@ -38,9 +38,9 @@ class ProdutividadeService:
 
         # Consolidar aliases do mesmo técnico para não dividir contagem.
         if t in {"RAFAEL - TI", "RAFAEL SIMAO - TI"} or ("SIMAO" in t and "RAFAEL" in t):
-            return "RAFAEL SIMAO - TI"
+            return "RAFAEL PRESTES SIMAO"
         if "WECKERLIN" in t or re.search(r"\bRAFAEL\s+W\b", t):
-            return "RAFAEL WECKERLIN - TI"
+            return "RAFAEL WECKERLIN"
         return t
 
     def _extract_between(self, text, marker):

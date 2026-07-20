@@ -12,6 +12,7 @@ TABLE_USER_SUBJECTS = f"{LOCAL_SCHEMA}.chamados_user_subjects"
 TABLE_USER_CHART_STATUSES = f"{LOCAL_SCHEMA}.chamados_user_chart_statuses"
 TABLE_USER_KANBAN_STATUSES = f"{LOCAL_SCHEMA}.chamados_user_kanban_statuses"
 TABLE_USER_KANBAN_COLUMN_ORDERS = f"{LOCAL_SCHEMA}.chamados_user_kanban_column_orders"
+TABLE_USER_CHAMADOS_FILTERS = f"{LOCAL_SCHEMA}.chamados_user_chamados_filters"
 
 def get_local_connection(_db_config=None):
     return psycopg2.connect(
@@ -125,6 +126,14 @@ def init_local_db(schema_name=None):
             display_order INTEGER NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (user_id, column_id)
+        )
+    """)
+    cur.execute(f"""
+        CREATE TABLE IF NOT EXISTS {schema}.chamados_user_chamados_filters (
+            user_id BIGINT NOT NULL REFERENCES {schema}.chamados_users(id) ON DELETE CASCADE,
+            filter_id TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, filter_id)
         )
     """)
     conn.commit()

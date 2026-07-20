@@ -248,10 +248,21 @@
             const d = date || new Date();
             const dd = String(d.getDate()).padStart(2, '0');
             const mm = String(d.getMonth() + 1).padStart(2, '0');
-            const yy = String(d.getFullYear()).slice(-2);
+            const yyyy = String(d.getFullYear());
             const hh = String(d.getHours()).padStart(2, '0');
             const mi = String(d.getMinutes()).padStart(2, '0');
-            return `${dd}/${mm}/${yy} ${hh}:${mi}`;
+            return `${dd}/${mm}/${yyyy} ${hh}:${mi}`;
+        }
+
+        function formatPendingDateTime(ticket) {
+            if (ticket.data_cad_display) return ticket.data_cad_display;
+            const isoDate = String(ticket.data_cad_iso || '').trim();
+            if (!isoDate) return '';
+            const parts = isoDate.split('-');
+            if (parts.length !== 3) return isoDate;
+            const time = String(ticket.hora_cad_fmt || '').slice(0, 5);
+            const base = `${parts[2]}/${parts[1]}/${parts[0]}`;
+            return time ? `${base} ${time}` : base;
         }
 
         function updateEvolutionDateTime() {
@@ -622,6 +633,11 @@
             section.style.display = 'block';
             grid.innerHTML = tickets.map(t => {
                 const sla = withSLA ? calculateSLA(t.data_cad_iso, t.hora_cad_fmt) : null;
+                const metaParts = [];
+                if (t.assunto) metaParts.push(`🏷️ ${t.assunto}`);
+                if (t.departamento) metaParts.push(`🏢 ${t.departamento}`);
+                const dateTimeLabel = formatPendingDateTime(t);
+                if (dateTimeLabel) metaParts.push(`📅 ${dateTimeLabel}`);
                 return `
                     <div class="pending-card ${sla?.isOverdue ? 'overdue' : ''}" onclick="openDetails('${t.cod_solicitacao}')" style="cursor:pointer;">
                         <div style="display:flex; justify-content:space-between; align-items:start;">
@@ -630,7 +646,10 @@
                         </div>
                         <div style="font-size: 0.85rem; margin-top:5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${t.titulo_solicitacao}</div>
                         ${withSLA ? `<span class="sla-timer" data-id="${t.cod_solicitacao}">${sla.timerText}</span>` : ''}
-                        <div class="pending-meta">👤 ${t.solicitante}<br>📅 ${t.data_cad_iso} ${t.hora_cad_fmt}</div>
+                        <div class="pending-meta" style="display:flex; flex-direction:column; gap:2px;">
+                            <div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">👤 ${t.solicitante || ''}</div>
+                            <div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${metaParts.join(' • ')}</div>
+                        </div>
                     </div>`;
             }).join('');
         }
@@ -691,6 +710,8 @@
                         <div>
                             ${data.criador ? `<p><strong>Criador por:</strong> ${data.criador}</p>` : ``}
                             <p><strong>Solicitante:</strong> ${(data.cod_usuario ? `${data.cod_usuario} - ` : '')}${data.solicitante || 'N/A'}</p>
+                            <p><strong>Assunto:</strong> ${data.assunto || 'N/A'}</p>
+                            <p><strong>Departamento:</strong> ${data.departamento || 'N/A'}</p>
                             <p><strong>Título:</strong> ${data.titulo_solicitacao}</p>
                             <p><strong>Descrição:</strong><br><div class="description-text">${data.descr_solicitacao}</div></p>
                             <p><strong>Ativo:</strong> ${data.descr_ativo || 'N/A'}</p>

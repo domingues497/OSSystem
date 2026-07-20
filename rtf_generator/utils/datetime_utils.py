@@ -1,6 +1,55 @@
 from datetime import datetime
 from datetime import timedelta
 
+
+def parse_datetime_value(value):
+    if value in (None, ""):
+        return None
+    if isinstance(value, datetime):
+        return value
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def format_display_datetime(value):
+    dt = parse_datetime_value(value)
+    if dt:
+        return dt.strftime("%d/%m/%Y %H:%M")
+    return "" if value in (None, "") else str(value)
+
+
+def format_display_date(value):
+    if value in (None, ""):
+        return ""
+    if isinstance(value, datetime):
+        return value.strftime("%d/%m/%Y")
+
+    text = str(value).strip()
+    if not text:
+        return ""
+
+    try:
+        numeric = str(int(text))
+        if len(numeric) == 8:
+            return f"{numeric[6:8]}/{numeric[4:6]}/{numeric[0:4]}"
+    except Exception:
+        pass
+
+    dt = parse_datetime_value(text)
+    if dt:
+        return dt.strftime("%d/%m/%Y")
+    return text
+
 def format_erp_date(date_val):
     if not date_val: return ""
     try:

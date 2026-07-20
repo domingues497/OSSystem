@@ -249,3 +249,19 @@ tr:hover td { background-color: #f8faff; }
     .filter-actions .btn { font-size: 0; padding: 9px 10px; }
     .filter-actions .btn i { font-size: 0.9rem; }
 }
+.teams-chat-btn{
+    background:#6264A7;
+    border-color:#6264A7;
+    color:#fff;
+    transition:.2s;
+}
+
+.teams-chat-btn:hover{
+    background:#50528c;
+    border-color:#50528c;
+    color:#fff;
+}
+
+.teams-chat-btn i{
+    font-size:14px;
+}

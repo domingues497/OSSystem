@@ -2,6 +2,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from database.local_connection import (
     TABLE_USER_CHART_STATUSES,
+    TABLE_USER_CHAMADOS_FILTERS,
     TABLE_USER_KANBAN_COLUMN_ORDERS,
     TABLE_USER_KANBAN_STATUSES,
     TABLE_USER_SUBJECTS,
@@ -10,6 +11,7 @@ from database.local_connection import (
     get_local_connection,
     init_local_db,
 )
+from utils.chamados_filters import normalize_chamados_filter_ids
 from utils.dashboard_statuses import (
     STATUS_BY_CODE,
     get_dashboard_status_definitions,
@@ -18,6 +20,7 @@ from utils.dashboard_statuses import (
     normalize_kanban_column_order,
     normalize_dashboard_status_codes,
 )
+from utils.datetime_utils import format_display_datetime
 
 
 class LocalAuthRepository:
@@ -40,6 +43,28 @@ class LocalAuthRepository:
         codes = normalize_dashboard_status_codes(kanban_status_codes)
         return codes or get_default_kanban_status_codes()
 
+    def _normalize_chamados_filter_ids(self, chamados_filter_ids=None, profile=None):
+        is_admin = (profile or "").strip().lower() == "admin"
+        return normalize_chamados_filter_ids(chamados_filter_ids, is_admin=is_admin)
+
+    def _get_department_description_column(self, cur):
+        cur.execute("SELECT * FROM BANCO01.DC1963 LIMIT 1")
+        columns = [str(col[0] or "").upper() for col in cur.description]
+        for candidate in (
+            "DESCR_DEPAR",
+            "NOME_DEPAR",
+            "DESC_DEPAR",
+            "DESCRICAO",
+            "DESCR_DEPARTAMENTO",
+            "NOME_DEPARTAMENTO",
+        ):
+            if candidate in columns:
+                return candidate
+        for name in columns:
+            if "DESCR" in name or "NOME" in name:
+                return name
+        return None
+
     def list_available_chart_statuses(self):
         return get_dashboard_status_definitions()
 
@@ -61,6 +86,22 @@ class LocalAuthRepository:
         rows = cur.fetchall()
         conn.close()
         return normalize_kanban_column_order([row[0] for row in rows], kanban_status_codes)
+
+    def get_chamados_filter_ids_for_user(self, user_id, profile=None):
+        conn = get_local_connection(self.db_path)
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT filter_id
+            FROM {TABLE_USER_CHAMADOS_FILTERS}
+            WHERE user_id = %s
+            ORDER BY filter_id
+            """,
+            (int(user_id),),
+        )
+        rows = cur.fetchall()
+        conn.close()
+        return self._normalize_chamados_filter_ids([row[0] for row in rows], profile=profile)
 
     def count_users(self):
         conn = get_local_connection(self.db_path)
@@ -93,7 +134,7 @@ class LocalAuthRepository:
                     "is_active": bool(row[4]),
                     "chart_show_external": bool(row[5]),
                     "chart_show_internal": bool(row[6]),
-                    "last_login_at": row[7],
+                    "last_login_at": format_display_datetime(row[7]),
                     "created_at": row[8],
                 }
             )
@@ -124,7 +165,7 @@ class LocalAuthRepository:
             "is_active": bool(row[5]),
             "chart_show_external": bool(row[6]),
             "chart_show_internal": bool(row[7]),
-            "last_login_at": row[8],
+            "last_login_at": format_display_datetime(row[8]),
             "created_at": row[9],
         }
 
@@ -149,6 +190,50 @@ class LocalAuthRepository:
             }
             for row in rows
         ]
+
+    def list_available_departments(self):
+        conn = get_local_connection(self.db_path)
+        cur = conn.cursor()
+        descr_column = self._get_department_description_column(cur)
+        descr_sql = descr_column if descr_column else "CAST(DC1963.COD_DEPAR AS TEXT)"
+        cur.execute(
+            f"""
+            SELECT DC1963.COD_DEPAR, COALESCE({descr_sql}, '')
+            FROM BANCO01.DC1963
+            ORDER BY COALESCE({descr_sql}, ''), DC1963.COD_DEPAR
+            """
+        )
+        rows = cur.fetchall()
+        conn.close()
+        return [
+            {
+                "cod_depar": int(row[0]),
+                "nome_departamento": (row[1] or "").strip() or str(int(row[0])),
+            }
+            for row in rows
+        ]
+
+    def list_department_users(self, department_codes):
+        department_codes = [int(code) for code in department_codes or [] if str(code).strip()]
+        if not department_codes:
+            return []
+        conn = get_local_connection(self.db_path)
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT DISTINCT DS0300.NOME_USUARIO
+            FROM public.DS0300
+            INNER JOIN BANCO01.DC1964 ON (DC1964.COD_USUARIO = DS0300.COD_USUARIO)
+            WHERE DC1964.COD_DEPAR = ANY(%s)
+              AND DS0300.NOME_USUARIO IS NOT NULL
+              AND BTRIM(DS0300.NOME_USUARIO) <> ''
+            ORDER BY DS0300.NOME_USUARIO
+            """,
+            (department_codes,),
+        )
+        rows = cur.fetchall()
+        conn.close()
+        return [str(row[0]).strip() for row in rows if str(row[0] or "").strip()]
 
     def get_subjects_for_user(self, user_id):
         conn = get_local_connection(self.db_path)
@@ -272,6 +357,25 @@ class LocalAuthRepository:
         conn.commit()
         conn.close()
 
+    def replace_user_departments(self, user_id, departments):
+        conn = get_local_connection(self.db_path)
+        cur = conn.cursor()
+        cur.execute(f"DELETE FROM {TABLE_USER_DEPARTMENTS} WHERE user_id = %s", (int(user_id),))
+        for dep in departments or []:
+            cod_depar = int(dep.get("cod_depar"))
+            nome_departamento = (dep.get("nome_departamento") or "").strip() or None
+            cur.execute(
+                f"""
+                INSERT INTO {TABLE_USER_DEPARTMENTS} (user_id, cod_depar, nome_departamento)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (user_id, cod_depar) DO UPDATE SET
+                    nome_departamento = EXCLUDED.nome_departamento
+                """,
+                (int(user_id), cod_depar, nome_departamento),
+            )
+        conn.commit()
+        conn.close()
+
     def replace_user_chart_statuses(self, user_id, chart_status_codes):
         codes = self._normalize_chart_status_codes(chart_status_codes)
         conn = get_local_connection(self.db_path)
@@ -324,16 +428,35 @@ class LocalAuthRepository:
         conn.commit()
         conn.close()
 
+    def replace_user_chamados_filter_ids(self, user_id, filter_ids, profile=None):
+        selected_filter_ids = self._normalize_chamados_filter_ids(filter_ids, profile=profile)
+        conn = get_local_connection(self.db_path)
+        cur = conn.cursor()
+        cur.execute(f"DELETE FROM {TABLE_USER_CHAMADOS_FILTERS} WHERE user_id = %s", (int(user_id),))
+        for filter_id in selected_filter_ids:
+            cur.execute(
+                f"""
+                INSERT INTO {TABLE_USER_CHAMADOS_FILTERS} (user_id, filter_id)
+                VALUES (%s, %s)
+                ON CONFLICT (user_id, filter_id) DO NOTHING
+                """,
+                (int(user_id), filter_id),
+            )
+        conn.commit()
+        conn.close()
+
     def list_users_with_subjects(self):
         users = self.list_users()
         for user in users:
+            user["departments"] = self.get_departments_for_user(user["id"])
             user["subjects"] = self.get_subjects_for_user(user["id"])
             user["chart_statuses"] = self.get_chart_statuses_for_user(user["id"])
             user["chart_status_codes"] = [item["code"] for item in user["chart_statuses"]]
             user["kanban_statuses"] = self.get_kanban_statuses_for_user(user["id"])
             user["kanban_status_codes"] = [item["code"] for item in user["kanban_statuses"]]
             user["kanban_column_order"] = self.get_kanban_column_order_for_user(user["id"], user["kanban_status_codes"])
-            if not user["subjects"]:
+            user["chamados_filter_ids"] = self.get_chamados_filter_ids_for_user(user["id"], profile=user["profile"])
+            if user["profile"] != "admin" and not user["subjects"]:
                 user["subjects"] = self._derive_subjects_from_departments(user["id"])
         return users
 
@@ -358,7 +481,7 @@ class LocalAuthRepository:
             for row in rows
         ]
 
-    def update_user(self, user_id, display_name, profile="subject", is_active=True, password=None, subjects=None, chart_flags=None, chart_status_codes=None, kanban_status_codes=None):
+    def update_user(self, user_id, display_name, profile="subject", is_active=True, password=None, subjects=None, departments=None, chart_flags=None, chart_status_codes=None, kanban_status_codes=None):
         profile = (profile or "subject").strip().lower()
         if profile not in {"admin", "subject"}:
             raise ValueError("Perfil inválido")
@@ -417,6 +540,7 @@ class LocalAuthRepository:
         self.replace_user_chart_statuses(user_id, chart_status_codes)
         self.replace_user_kanban_statuses(user_id, kanban_status_codes)
         self.replace_user_kanban_column_order(user_id, None, kanban_status_codes)
+        self.replace_user_departments(user_id, departments or [])
         if profile == "admin":
             self.replace_user_subjects(user_id, [])
         else:
@@ -469,7 +593,7 @@ class LocalAuthRepository:
                     (user_id, cod_assunto, descr_assunto),
                 )
 
-        if departments and profile != "admin":
+        if departments:
             for dep in departments:
                 cod_depar = int(dep.get("cod_depar"))
                 nome_departamento = (dep.get("nome_departamento") or "").strip() or None
@@ -488,6 +612,7 @@ class LocalAuthRepository:
         self.replace_user_chart_statuses(user_id, chart_status_codes)
         self.replace_user_kanban_statuses(user_id, kanban_status_codes)
         self.replace_user_kanban_column_order(user_id, None, kanban_status_codes)
+        self.replace_user_chamados_filter_ids(user_id, None, profile=profile)
         return user_id
 
     def authenticate(self, username, password):
@@ -523,7 +648,7 @@ class LocalAuthRepository:
             "is_active": bool(row[4]),
             "chart_show_external": bool(row[5]),
             "chart_show_internal": bool(row[6]),
-            "last_login_at": row[7],
+            "last_login_at": format_display_datetime(row[7]),
             "created_at": row[8],
         }
         user["chart_statuses"] = self.get_chart_statuses_for_user(user["id"])
@@ -531,8 +656,10 @@ class LocalAuthRepository:
         user["kanban_statuses"] = self.get_kanban_statuses_for_user(user["id"])
         user["kanban_status_codes"] = [item["code"] for item in user["kanban_statuses"]]
         user["kanban_column_order"] = self.get_kanban_column_order_for_user(user["id"], user["kanban_status_codes"])
+        user["chamados_filter_ids"] = self.get_chamados_filter_ids_for_user(user["id"], profile=user["profile"])
+        user["departments"] = self.get_departments_for_user(user["id"])
         user["subjects"] = self.get_subjects_for_user(user["id"])
-        if not user["subjects"]:
+        if user["profile"] != "admin" and not user["subjects"]:
             user["subjects"] = self._derive_subjects_from_departments(user["id"])
         return user
 

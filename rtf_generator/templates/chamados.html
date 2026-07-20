@@ -31,8 +31,8 @@
                         <i class="fas fa-sync-alt" style="font-size: 0.8rem; color: #666;" title="Atualização Automática"></i>
                         <select id="refresh-interval" onchange="setupAutoRefresh()" style="border: none; background: transparent; font-size: 0.8rem; font-weight: 600; color: #444; cursor: pointer;">
                             <option value="0">Off</option>
-                            <option value="30">30s</option>
-                            <option value="60" selected>1m</option>
+                            <option value="30" selected>30s</option>
+                            <option value="60">1m</option>
                             <option value="300">5m</option>
                             <option value="600">10m</option>
                         </select>
@@ -65,32 +65,27 @@
         </div>
 
         <div class="filters-grid">
-            <div class="filter-group filter-group-id">
+            <div class="filter-group filter-group-id" data-filter-visibility="id">
                 <label class="filter-label">Chamado</label>
                 <input type="text" id="filter-id" class="filter-input filter-input-id" placeholder="Ex: 81340" maxlength="6">
             </div>
-            {% if can_manage_filters %}
-            <div class="filter-group filter-group-solicitante">
+            <div class="filter-group filter-group-solicitante" data-filter-visibility="solicitante">
                 <label class="filter-label">Solicitante</label>
                 <input type="text" id="filter-solicitante" class="filter-input filter-input-solicitante" placeholder="Nome...">
             </div>
-            <div class="filter-group">
+            <div class="filter-group" data-filter-visibility="ultima_iteracao">
                 <label class="filter-label">Últ. Iteração:</label>
                 <select id="filter-executor-visible" class="filter-input filter-select-tecnico" onchange="carregarKanban();">
                     <option value="">Todos</option>
                 </select>
             </div>
-            {% else %}
-            <input type="hidden" id="filter-solicitante">
-            <input type="hidden" id="filter-executor-visible">
-            {% endif %}
-            <div class="filter-group filter-group-conteudo">
+            <div class="filter-group filter-group-conteudo" data-filter-visibility="conteudo">
                 <label class="filter-label">Conteúdo:</label>
                 <input type="text" id="filter-conteudo" class="filter-input filter-input-conteudo" placeholder="Texto...">
             </div>
             <input type="hidden" id="filter-executor">
             <input type="hidden" id="filter-etapa">
-            <div class="filter-group filter-group-tipo">
+            <div class="filter-group filter-group-tipo" data-filter-visibility="tipo">
                 <label class="filter-label">Tipo:</label>
                 <select id="filter-tipo" class="filter-input filter-select-tipo" onchange="carregarAssuntos(); carregarAtivos(); carregarKanban();">
                     <option value="">Todos</option>
@@ -99,13 +94,13 @@
                     <option value="BI">B.I</option>
                 </select>
             </div>
-            <div class="filter-group filter-group-assunto">
+            <div class="filter-group filter-group-assunto" data-filter-visibility="assunto_busca">
                 <label class="filter-label">Assunto:</label>
                 <div class="filter-assunto-row">
                     <input type="text" id="filter-assunto-q" class="filter-input filter-input-assunto-busca" placeholder="Buscar....">
                 </div>
             </div>
-            <div class="filter-assunto-select-wrap">
+            <div class="filter-assunto-select-wrap" data-filter-visibility="assunto">
                         <label class="filter-label">Assunto / Setor</label>
                         <select id="filter-assunto" class="filter-input filter-select-assunto" onchange="carregarAtivos(); carregarKanban();">
                             <option value="">Todos</option>
@@ -116,12 +111,32 @@
                 <button type="button" class="btn btn-filter btn-secondary" onclick="limparFiltros()" title="Limpar" style="padding: 8px 10px; font-size: 0; width: 40px; justify-content: center;">
                     <i class="fas fa-eraser" style="font-size: 0.9rem;"></i>
                 </button>
+                <button type="button" class="btn btn-filter btn-secondary" onclick="openFilterPreferences()" title="Editar filtros" style="padding: 8px 10px; font-size: 0; width: 40px; justify-content: center;">
+                    <i class="fas fa-sliders-h" style="font-size: 0.9rem;"></i>
+                </button>
             </div>
         </div>
 
         <div id="loading" class="loading-overlay" style="display:none;">
             <img src="{{ url_for('static', filename='img/logo-capal-transparent.png') }}" class="loading-logo" alt="CAPAL">
             <span>Atualizando...</span>
+        </div>
+
+        <div id="filter-preferences-overlay" style="display:none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 9999; align-items: center; justify-content: center;">
+            <div style="background: #fff; border-radius: 10px; padding: 16px; width: min(460px, calc(100vw - 24px)); box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+                <div style="display:flex; align-items:center; justify-content: space-between; margin-bottom: 10px;">
+                    <strong>Editar filtros visiveis</strong>
+                    <button type="button" onclick="closeFilterPreferences()" style="border: none; background: transparent; font-size: 18px; cursor: pointer;">×</button>
+                </div>
+                <p style="margin: 0 0 12px; font-size: 0.8rem; color: #5f6368; line-height: 1.5;">
+                    Escolha quais filtros quer deixar visiveis na tela. Novos filtros entram aqui automaticamente quando forem cadastrados no sistema.
+                </p>
+                <div id="filter-preferences-list" style="display:flex; flex-direction:column; gap: 10px; max-height: 320px; overflow:auto;"></div>
+                <div style="display:flex; gap: 8px; margin-top: 12px;">
+                    <button type="button" onclick="saveFilterPreferences()" style="flex:1; padding: 8px 10px; border-radius: 6px; border: none; background: #1a73e8; color: #fff; font-weight: 600; cursor: pointer;">Salvar</button>
+                    <button type="button" onclick="closeFilterPreferences()" style="flex:1; padding: 8px 10px; border-radius: 6px; border: 1px solid #ddd; background: #fff; color: #444; font-weight: 600; cursor: pointer;">Cancelar</button>
+                </div>
+            </div>
         </div>
 
         {% if can_manage_filters %}
@@ -284,9 +299,18 @@
         </div>
     </div>
 
+    <script id="access-scope-data" type="application/json">{{ (access_scope if access_scope else {}) | tojson }}</script>
+    <script id="chamados-filter-definitions-data" type="application/json">{{ (available_chamados_filters if available_chamados_filters else []) | tojson }}</script>
+    <script id="visible-kanban-columns-data" type="application/json">{{ (access_scope.kanban_column_ids if access_scope else []) | tojson }}</script>
+
+    <script src="{{ url_for('static', filename='js/teams.js') }}"></script>
     <script>
-        const ACCESS_SCOPE = {{ access_scope | tojson }};
-        const VISIBLE_KANBAN_COLUMNS = {{ (access_scope.kanban_column_ids if access_scope else []) | tojson }};
+        const ACCESS_SCOPE = JSON.parse(document.getElementById('access-scope-data')?.textContent || '{}');
+        const CHAMADOS_FILTER_DEFINITIONS = JSON.parse(document.getElementById('chamados-filter-definitions-data')?.textContent || '[]');
+        let visibleChamadosFilterIds = Array.isArray(ACCESS_SCOPE && ACCESS_SCOPE.chamados_filter_ids)
+            ? [...ACCESS_SCOPE.chamados_filter_ids]
+            : [];
+        const VISIBLE_KANBAN_COLUMNS = JSON.parse(document.getElementById('visible-kanban-columns-data')?.textContent || '[]');
         const ALL_KANBAN_COLUMNS = ['aguardando', 'aberta', 'andamento', 'avaliacao', 'programada', 'retrabalho', 'encerrada', 'rejeitada'];
         let currentColumnOrder = [...VISIBLE_KANBAN_COLUMNS];
         let draggedColumnId = '';
@@ -301,6 +325,26 @@
         let currentModalContext = { columnId: null, ticketId: null, ticketsSnapshot: [] };
         let tvModeEnabled = localStorage.getItem('tv-mode-enabled') === 'true';
         let wakeLock = null;
+        let scrollMemorySetupDone = false;
+        let kanbanColumnScrollMemory = {};
+
+        function setupKanbanScrollMemoryObservers() {
+            if (scrollMemorySetupDone) return;
+            scrollMemorySetupDone = true;
+
+            document.querySelectorAll('.kanban-cards').forEach((node) => {
+                if (!node) return;
+                node.addEventListener('scroll', () => {
+                    if (!node.id) return;
+                    kanbanColumnScrollMemory[node.id] = {
+                        scrollTop: node.scrollTop || 0,
+                        scrollHeight: node.scrollHeight || 0,
+                        clientHeight: node.clientHeight || 0,
+                        ts: Date.now(),
+                    };
+                }, { passive: true });
+            });
+        }
         
         // Configurações do Kanban
         let kanbanSort = {
@@ -389,6 +433,31 @@
                 const columnEl = document.getElementById(`col-${columnId}`);
                 if (columnEl) board.appendChild(columnEl);
             });
+        }
+
+        function syncCurrentColumnOrder(availableColumnIds) {
+            const available = Array.isArray(availableColumnIds) ? availableColumnIds.filter(Boolean) : [];
+            if (!available.length) {
+                currentColumnOrder = [];
+                return;
+            }
+
+            const preferred = Array.isArray(currentColumnOrder) && currentColumnOrder.length
+                ? currentColumnOrder
+                : (Array.isArray(VISIBLE_KANBAN_COLUMNS) && VISIBLE_KANBAN_COLUMNS.length ? VISIBLE_KANBAN_COLUMNS : available);
+
+            const nextOrder = [];
+            preferred.forEach((columnId) => {
+                if (available.includes(columnId) && !nextOrder.includes(columnId)) {
+                    nextOrder.push(columnId);
+                }
+            });
+            available.forEach((columnId) => {
+                if (!nextOrder.includes(columnId)) {
+                    nextOrder.push(columnId);
+                }
+            });
+            currentColumnOrder = nextOrder;
         }
 
         async function persistKanbanColumnOrder() {
@@ -489,6 +558,7 @@
                 modeIcon.style.color = aguardandoOrderMode === 'cor' ? '#1a73e8' : '';
             }
             updateOnlyApprovedButton();
+            setupKanbanScrollMemoryObservers();
         }
         
         function updateOnlyApprovedButton() {
@@ -535,6 +605,62 @@
                     scheduleFilterRefresh();
                 });
             });
+        }
+
+        function applyChamadosFilterVisibility() {
+            const selected = new Set(visibleChamadosFilterIds || []);
+            document.querySelectorAll('[data-filter-visibility]').forEach((element) => {
+                element.style.display = selected.has(element.dataset.filterVisibility) ? '' : 'none';
+            });
+        }
+
+        function renderFilterPreferences() {
+            const container = document.getElementById('filter-preferences-list');
+            if (!container) return;
+            const selected = new Set(visibleChamadosFilterIds || []);
+            container.innerHTML = CHAMADOS_FILTER_DEFINITIONS.map((item) => `
+                <label style="display:flex; gap: 10px; align-items:flex-start; padding: 10px 12px; border-radius: 10px; border: 1px solid #e5e7eb; background: #f8fafc; cursor: pointer;">
+                    <input type="checkbox" value="${item.id}" ${selected.has(item.id) ? 'checked' : ''} style="margin-top: 2px;">
+                    <span>
+                        <strong style="display:block; font-size: 0.88rem; color:#1f2937;">${item.label}</strong>
+                        <span style="display:block; margin-top: 4px; font-size: 0.78rem; color:#6b7280; line-height: 1.45;">${item.description}</span>
+                    </span>
+                </label>
+            `).join('');
+        }
+
+        function openFilterPreferences() {
+            renderFilterPreferences();
+            const overlay = document.getElementById('filter-preferences-overlay');
+            if (overlay) overlay.style.display = 'flex';
+        }
+
+        function closeFilterPreferences() {
+            const overlay = document.getElementById('filter-preferences-overlay');
+            if (overlay) overlay.style.display = 'none';
+        }
+
+        async function saveFilterPreferences() {
+            const container = document.getElementById('filter-preferences-list');
+            if (!container) return;
+            const selected = Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map((input) => input.value);
+            try {
+                c('/api/erp/chamados_filter_preferences', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filter_ids: selected }),
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || 'Nao foi possivel salvar as preferencias dos filtros.');
+                }
+                visibleChamadosFilterIds = Array.isArray(data.filter_ids) ? data.filter_ids : selected;
+                if (ACCESS_SCOPE) ACCESS_SCOPE.chamados_filter_ids = [...visibleChamadosFilterIds];
+                applyChamadosFilterVisibility();
+                closeFilterPreferences();
+            } catch (error) {
+                alert(error.message || 'Nao foi possivel salvar as preferencias dos filtros.');
+            }
         }
 
         function _parseCsvList(value) {
@@ -871,7 +997,7 @@
             currentKanbanView = {};
             const kanbanItems = lastKanbanData.items || lastKanbanData;
             const cols = (lastKanbanData.columns || []).map(col => col.id);
-            currentColumnOrder = cols.length ? [...cols] : (VISIBLE_KANBAN_COLUMNS.length ? [...VISIBLE_KANBAN_COLUMNS] : [...ALL_KANBAN_COLUMNS]);
+            syncCurrentColumnOrder(cols.length ? cols : (VISIBLE_KANBAN_COLUMNS.length ? VISIBLE_KANBAN_COLUMNS : ALL_KANBAN_COLUMNS));
             applyKanbanColumnOrderToDom();
             cols.forEach(col => {
                 let baseTickets = [...(kanbanItems[col] || [])];
@@ -977,7 +1103,20 @@
             if (countEl) countEl.textContent = tickets.length;
             const container = document.getElementById(`cards-${id}`);
             if (!container) return;
+            const memoryKey = `cards-${id}`;
             const previousScrollTop = container.scrollTop;
+            const rememberedScrollTop = Number(kanbanColumnScrollMemory[memoryKey]?.scrollTop || 0);
+            const restoreScrollTop = previousScrollTop > 0 ? previousScrollTop : rememberedScrollTop;
+            const previousContainerTop = container.getBoundingClientRect().top;
+            const previousCards = Array.from(container.querySelectorAll('.kanban-card[data-ticket-id]'));
+            const firstVisibleCard = previousCards.find((card) => card.getBoundingClientRect().bottom > previousContainerTop);
+            const scrollAnchor = firstVisibleCard
+                && previousScrollTop > 0
+                ? {
+                    ticketId: firstVisibleCard.dataset.ticketId,
+                    offsetTop: firstVisibleCard.getBoundingClientRect().top - previousContainerTop,
+                }
+                : null;
             container.innerHTML = tickets.map(t => {
                 let cardClass = 'kanban-card';
                 if (t.no_iteration) cardClass += ' no-iteration';
@@ -1010,7 +1149,7 @@
                     </span>` : '';
                 
                 return `
-                    <div class="${cardClass}" onclick="openDetails('${t.id}', '${id}')">
+                    <div class="${cardClass}" data-ticket-id="${t.id}" onclick="openDetails('${t.id}', '${id}')">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
                             <span style="font-weight: bold; color: #333;">
                                 #${t.id}${dataAbertura ? ` <span style="font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; background: #f1f3f4; color: #5f6368; border: 1px solid #dadce0; font-weight: bold;">${dataAbertura}</span>` : ''} ${atendenteChip} ${t.has_note ? '📝' : ''}
@@ -1030,7 +1169,31 @@
                     </div>
                 `;
             }).join('');
-            container.scrollTop = previousScrollTop;
+            window.requestAnimationFrame(() => {
+                if (!container.isConnected) return;
+                if (scrollAnchor && scrollAnchor.ticketId) {
+                    const anchorCard = container.querySelector(`.kanban-card[data-ticket-id="${scrollAnchor.ticketId}"]`);
+                    if (anchorCard) {
+                        const containerTop = container.getBoundingClientRect().top;
+                        const anchorTop = anchorCard.getBoundingClientRect().top;
+                        container.scrollTop += (anchorTop - containerTop) - scrollAnchor.offsetTop;
+                        kanbanColumnScrollMemory[memoryKey] = {
+                            scrollTop: container.scrollTop,
+                            scrollHeight: container.scrollHeight,
+                            clientHeight: container.clientHeight,
+                            ts: Date.now(),
+                        };
+                        return;
+                    }
+                }
+                container.scrollTop = Math.max(0, Math.min(restoreScrollTop, container.scrollHeight - container.clientHeight));
+                kanbanColumnScrollMemory[memoryKey] = {
+                    scrollTop: container.scrollTop,
+                    scrollHeight: container.scrollHeight,
+                    clientHeight: container.clientHeight,
+                    ts: Date.now(),
+                };
+            });
         }
 
         function getColumnTickets(columnId, useSnapshot = true) {
@@ -1193,8 +1356,28 @@
                         <div>
                             ${data.criador ? `<p><strong>Criador por:</strong> ${data.criador}</p>` : ``}
                             <p><strong>Chamado:</strong> #${id}</p>
-                            <p><strong>Atendente:</strong> ${data.atendente_atual ? escapeHtml(data.atendente_atual) : 'Não definido'}</p>
-                            <p><strong>Solicitante:</strong> ${(data.cod_usuario ? `${data.cod_usuario} - ` : '')}${data.solicitante ? escapeHtml(data.solicitante) : 'N/A'}</p>
+                            <p>
+                            <p class="mb-2">
+                                <strong>Solicitante:</strong>
+                                    <span>${(data.cod_usuario ? `${data.cod_usuario} - ` : '')}${escapeHtml(data.solicitante)}</span>
+                                    ${
+                                        data.teams_user
+                                        ? `
+                                            <button
+                                                type="button"
+                                                class="btn btn-sm btn-primary teams-chat-btn"
+                                                data-teams-user="${escapeHtml(data.teams_user)}"
+                                                onclick="abrirTeams(this.dataset.teamsUser)">
+                                                <i class="fab fa-microsoft"></i>
+                                                Teams
+                                            </button>
+                                        `
+                                        : ''
+                                    }
+                            <br>
+
+                            <p><strong>Assunto:</strong> ${data.assunto ? escapeHtml(data.assunto) : 'N/A'}</p>
+                            <p><strong>Departamento:</strong> ${data.departamento ? escapeHtml(data.departamento) : 'N/A'}</p>
                             ${data.trello && data.trello.integrado ? `
                                 <p><strong>Trello:</strong> Integrado${data.trello.card_id ? ` (${escapeHtml(data.trello.card_id)})` : ''}</p>
                                 <p><strong>Setor:</strong> ${data.trello.setor ? escapeHtml(data.trello.setor) : 'Sem rótulo'}${data.trello.sem_rotulo ? ` <span style="display:inline-block; font-size:0.65rem; padding: 2px 6px; border-radius: 4px; background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; font-weight: bold;">SEM RÓTULO</span>` : ''}</p>
@@ -1463,6 +1646,8 @@
             }
             
             applyInitialSettings();
+            applyChamadosFilterVisibility();
+            renderFilterPreferences();
             setupEnterToFilter();
             setupLiveFilters();
             if (ACCESS_SCOPE && ACCESS_SCOPE.can_manage_filters) {

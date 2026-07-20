@@ -12,10 +12,10 @@ from utils.datetime_utils import erp_to_datetime, add_business_minutes, business
 
 notify_bp = Blueprint('notify', __name__)
 
-def _format_br_dt_yy_hhmm(dt_str):
+def _format_br_dt_hhmm(dt_str):
     try:
         dt = datetime.strptime((dt_str or "").strip(), "%Y-%m-%d %H:%M:%S")
-        return dt.strftime("%d/%m/%y %H:%M")
+        return dt.strftime("%d/%m/%Y %H:%M")
     except Exception:
         return ""
 
@@ -117,7 +117,7 @@ def run_access_report_job(force=False, dry_run=False):
             return {"status": 200, "payload": {"message": "Nenhum acesso válido no log"}}
 
         d_label = now.strftime("%d/%m/%Y")
-        last_access_br = _format_br_dt_yy_hhmm(last_access_raw)
+        last_access_br = _format_br_dt_hhmm(last_access_raw)
         lines = [
             f"Acessos ({d_label})",
             f"Último acesso: {last_access_br}" if last_access_br else "Último acesso: -",

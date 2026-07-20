@@ -157,6 +157,34 @@ class ERPRepository:
         cur = conn.cursor()
         text_col = self._get_text_col(cur)
         assunto_condition, assunto_params = self._scope_subject_condition("DM1744.COD_ASSUNTO", access_scope)
+        department_codes = []
+        for raw in (access_scope or {}).get("department_codes", []):
+            try:
+                code = int(raw)
+            except Exception:
+                continue
+            if code not in department_codes:
+                department_codes.append(code)
+
+        # Quando o usuario tem departamento configurado em /usuarios,
+        # o filtro "Ult. Iteracao" deve listar apenas operadores daquele departamento.
+        if department_codes:
+            cur.execute(
+                """
+                SELECT DISTINCT DS0300.NOME_USUARIO
+                FROM public.DS0300
+                INNER JOIN BANCO01.DC1964 ON (DC1964.COD_USUARIO = DS0300.COD_USUARIO)
+                WHERE DC1964.COD_DEPAR = ANY(%s)
+                  AND DS0300.NOME_USUARIO IS NOT NULL
+                  AND BTRIM(DS0300.NOME_USUARIO) <> ''
+                ORDER BY DS0300.NOME_USUARIO
+                """,
+                (department_codes,),
+            )
+            rows = cur.fetchall()
+            cur.close()
+            conn.close()
+            return [str(row[0]).strip() for row in rows if str(row[0] or "").strip()]
         
         query_operadores = f"""
             SELECT DISTINCT DS0300.NOME_USUARIO
@@ -214,13 +242,29 @@ class ERPRepository:
                 DM1744.DATA_INIC_ATEND, DM1744.HORA_INIC_ATEND, DM1744.DATA_BAIXA, DM1744.HORA_BAIXA,
                 DM1744.COD_USUARIO, DS0300.NOME_USUARIO as SOLICITANTE, DM1744.COD_SOLICITACAO, DM1744.TITULO_SOLICITACAO,
                 DM1744.DESCR_SOLICITACAO, DC1629.DESCR_ATIVO, DC1629.IDENT_ATIVO as TAG,
+                DC1739.DESCR_ASSUNTO as ASSUNTO,
+                DEPT.DEPARTAMENTO,
                 NULLIF(TRIM(DM1744.ID_CARTAO_TRELLO), '') AS TRELLO_CARD_ID,
                 TRELLO.ID_ROTULO AS TRELLO_LABEL_ID,
                 COALESCE(AUTH.req_count, 0) AS AUTH_REQ_COUNT,
-                COALESCE(AUTH.appr_count, 0) AS AUTH_APPR_COUNT
+                COALESCE(AUTH.appr_count, 0) AS AUTH_APPR_COUNT,
+                U.teams_user as TEAMS_USER
             FROM BANCO01.DM1744 
             LEFT JOIN public.DS0300 ON (DS0300.COD_USUARIO = DM1744.COD_USUARIO)
             LEFT JOIN BANCO01.DC1629 ON (DC1629.COD_ATIVO = DM1744.COD_ATIVO)
+            LEFT JOIN BANCO01.DC1739 ON (DC1739.COD_ASSUNTO = DM1744.COD_ASSUNTO)
+            LEFT JOIN capalti.chamados_usuarios U ON (U.cod_usuario = DM1744.COD_USUARIO)
+            LEFT JOIN LATERAL (
+                SELECT STRING_AGG(
+                    DISTINCT D.DESCR_DEPAR,
+                    ', '
+                    ORDER BY D.DESCR_DEPAR
+                ) AS DEPARTAMENTO
+                FROM BANCO01.DC1966 X
+                INNER JOIN BANCO01.DC1963 D
+                    ON D.COD_DEPAR = X.COD_DEPAR
+                WHERE X.COD_ASSUNTO = DM1744.COD_ASSUNTO
+            ) DEPT ON TRUE
             LEFT JOIN LATERAL (
                 SELECT ID_ROTULO
                 FROM BANCO01.DM2113
@@ -289,9 +333,17 @@ class ERPRepository:
                 DS0300.NOME_USUARIO AS SOLICITANTE,
                 DM1744.DATA_CAD,
                 DM1744.HORA_CAD,
+                DC1739.DESCR_ASSUNTO AS ASSUNTO,
+                DEPT.DEPARTAMENTO,
                 NULLIF(TRIM(DM1744.ID_CARTAO_TRELLO), '') AS TRELLO_CARD_ID
             FROM BANCO01.DM1744
             LEFT JOIN public.DS0300 ON (DS0300.COD_USUARIO = DM1744.COD_USUARIO)
+            LEFT JOIN BANCO01.DC1739 ON (DC1739.COD_ASSUNTO = DM1744.COD_ASSUNTO)
+            LEFT JOIN LATERAL (
+                SELECT STRING_AGG(DISTINCT CAST(X.COD_DEPAR AS TEXT), ', ' ORDER BY CAST(X.COD_DEPAR AS TEXT)) AS DEPARTAMENTO
+                FROM BANCO01.DC1966 X
+                WHERE X.COD_ASSUNTO = DM1744.COD_ASSUNTO
+            ) DEPT ON TRUE
             WHERE {scope_condition}
               AND NULLIF(TRIM(DM1744.ID_CARTAO_TRELLO), '') IS NOT NULL
               AND NOT EXISTS (
@@ -769,9 +821,17 @@ class ERPRepository:
                 DM1744.TITULO_SOLICITACAO, 
                 DM1744.DATA_CAD, 
                 DM1744.HORA_CAD,
-                DS0300.NOME_USUARIO as SOLICITANTE
+                DS0300.NOME_USUARIO as SOLICITANTE,
+                DC1739.DESCR_ASSUNTO AS ASSUNTO,
+                DEPT.DEPARTAMENTO
             FROM BANCO01.DM1744 
             LEFT JOIN public.DS0300 ON (DS0300.COD_USUARIO = DM1744.COD_USUARIO)
+            LEFT JOIN BANCO01.DC1739 ON (DC1739.COD_ASSUNTO = DM1744.COD_ASSUNTO)
+            LEFT JOIN LATERAL (
+                SELECT STRING_AGG(DISTINCT CAST(X.COD_DEPAR AS TEXT), ', ' ORDER BY CAST(X.COD_DEPAR AS TEXT)) AS DEPARTAMENTO
+                FROM BANCO01.DC1966 X
+                WHERE X.COD_ASSUNTO = DM1744.COD_ASSUNTO
+            ) DEPT ON TRUE
             WHERE DM1744.COD_STATUS_DOC = 'IM'
               AND {scope_condition}
               AND NOT EXISTS (
@@ -1077,10 +1137,12 @@ class ERPRepository:
                 (COALESCE(AUTH.req_count, 0) > COALESCE(AUTH.appr_count, 0)) AS WAITING_AUTH,
                 (COALESCE(AUTH.appr_count, 0) > 0) AS AUTH_APPROVED,
                 COALESCE(AUTH.req_count, 0) AS AUTH_REQ_COUNT,
-                COALESCE(AUTH.appr_count, 0) AS AUTH_APPR_COUNT
+                COALESCE(AUTH.appr_count, 0) AS AUTH_APPR_COUNT,
+                U.teams_user AS TEAMS_USER
             FROM BANCO01.DM1744
             LEFT JOIN public.DS0300 ON (DS0300.COD_USUARIO = DM1744.COD_USUARIO)
             LEFT JOIN BANCO01.DC1739 ON (DC1739.COD_ASSUNTO = DM1744.COD_ASSUNTO)
+            LEFT JOIN capalti.chamados_usuarios U ON (U.cod_usuario = DM1744.COD_USUARIO)
             LEFT JOIN LATERAL (
                 SELECT
                     SUM(CASE WHEN (

@@ -4,249 +4,1372 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Usuarios - SGC</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
+        :root {
+            --capal-blue: #0070b8;
+            --capal-blue-soft: rgba(0, 112, 184, 0.1);
+            --capal-green: #39791f;
+            --capal-dark-green: #004e1b;
+            --capal-yellow: #f9b200;
+            --surface: rgba(255, 255, 255, 0.96);
+            --surface-soft: #f8fafc;
+            --surface-muted: #f3f6f9;
+            --border: rgba(31, 47, 32, 0.1);
+            --border-strong: rgba(0, 112, 184, 0.16);
+            --text: #1f2f20;
+            --text-muted: #65756a;
+            --text-soft: #7d8b82;
+            --danger: #b42318;
+            --danger-bg: rgba(255, 241, 242, 0.94);
+            --success: #1b6e37;
+            --success-bg: rgba(238, 251, 241, 0.96);
+            --shadow-soft: 0 18px 40px rgba(0, 78, 27, 0.08);
+            --shadow-modal: 0 28px 80px rgba(0, 33, 71, 0.18);
+            --radius-card: 20px;
+            --radius-control: 14px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
             margin: 0;
-            font-family: Arial, sans-serif;
-            background: #f5f7fb;
-            color: #1f2937;
+            min-height: 100vh;
+            font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif;
+            background:
+                radial-gradient(circle at top left, rgba(0, 112, 184, 0.14), transparent 28%),
+                radial-gradient(circle at bottom right, rgba(177, 200, 0, 0.16), transparent 26%),
+                linear-gradient(140deg, #eef2ee 0%, #f8faf8 48%, #eff5f0 100%);
+            color: var(--text);
         }
+
+        body.modal-open {
+            overflow: hidden;
+        }
+
         .page {
-            max-width: 1200px;
+            max-width: 1280px;
             margin: 0 auto;
-            padding: 24px;
+            padding: 32px 24px 48px;
         }
-        .header {
+
+        .hero {
+            position: relative;
+            overflow: hidden;
             display: flex;
             justify-content: space-between;
+            gap: 20px;
+            flex-wrap: wrap;
+            padding: 28px 30px;
+            border-radius: 28px;
+            background:
+                linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 248, 0.94)),
+                linear-gradient(180deg, rgba(0, 112, 184, 0.03), rgba(57, 121, 31, 0.04));
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .hero::before,
+        .hero::after {
+            content: "";
+            position: absolute;
+            border-radius: 999px;
+            opacity: 0.13;
+            pointer-events: none;
+        }
+
+        .hero::before {
+            width: 280px;
+            height: 280px;
+            right: -120px;
+            top: -120px;
+            background: linear-gradient(135deg, var(--capal-yellow), var(--capal-blue));
+        }
+
+        .hero::after {
+            width: 260px;
+            height: 260px;
+            left: -90px;
+            bottom: -140px;
+            background: linear-gradient(135deg, var(--capal-green), var(--capal-dark-green));
+        }
+
+        .hero-main,
+        .hero-actions {
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero-main {
+            max-width: 720px;
+        }
+
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            font-size: 0.84rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--capal-green);
+            font-weight: 700;
+        }
+
+        .hero h1 {
+            margin: 0;
+            font-size: clamp(2rem, 4vw, 2.35rem);
+            line-height: 1.08;
+            color: var(--capal-dark-green);
+        }
+
+        .hero p {
+            margin: 14px 0 0;
+            max-width: 620px;
+            font-size: 0.98rem;
+            line-height: 1.65;
+            color: var(--text-muted);
+        }
+
+        .hero-meta {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        .hero-meta-card {
+            min-width: 160px;
+            padding: 14px 16px;
+            border-radius: 16px;
+            border: 1px solid rgba(0, 112, 184, 0.12);
+            background: rgba(255, 255, 255, 0.82);
+        }
+
+        .hero-meta-label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 0.76rem;
+            color: var(--text-soft);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 700;
+        }
+
+        .hero-meta-value {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .hero-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            justify-content: space-between;
+            align-items: flex-end;
+            min-width: 240px;
+        }
+
+        .top-links {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .btn-link,
+        .btn-primary,
+        .btn-secondary,
+        .btn-ghost {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            min-height: 44px;
+            padding: 0 16px;
+            border-radius: 12px;
+            font-size: 0.94rem;
+            font-weight: 700;
+            text-decoration: none;
+            cursor: pointer;
+            transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+        }
+
+        .btn-link,
+        .btn-secondary,
+        .btn-ghost {
+            background: #fff;
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        .btn-primary {
+            border: none;
+            background: linear-gradient(135deg, var(--capal-blue), #01609c);
+            color: #fff;
+            box-shadow: 0 16px 26px rgba(0, 112, 184, 0.2);
+        }
+
+        .btn-link:hover,
+        .btn-secondary:hover,
+        .btn-ghost:hover,
+        .btn-primary:hover {
+            transform: translateY(-1px);
+        }
+
+        .btn-link:hover,
+        .btn-secondary:hover,
+        .btn-ghost:hover {
+            border-color: rgba(0, 112, 184, 0.22);
+            background: #f7fbff;
+            color: var(--capal-blue);
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 18px 30px rgba(0, 112, 184, 0.24);
+            filter: brightness(1.02);
+        }
+
+        .toolbar {
+            margin-top: 24px;
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+            padding: 22px 24px;
+            border-radius: 24px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .toolbar-main {
+            flex: 1 1 480px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .search-wrap {
+            position: relative;
+        }
+
+        .search-wrap i {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-soft);
+        }
+
+        .search-input {
+            width: 100%;
+            min-height: 48px;
+            padding: 0 16px 0 44px;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            background: #fff;
+            font: inherit;
+            color: var(--text);
+            outline: none;
+        }
+
+        .search-input:focus,
+        .field input:focus,
+        .field select:focus,
+        .section-search input:focus {
+            border-color: var(--capal-blue);
+            box-shadow: 0 0 0 4px rgba(0, 112, 184, 0.12);
+        }
+
+        .filter-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .filter-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 40px;
+            padding: 0 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(31, 47, 32, 0.08);
+            background: #fff;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.88rem;
+            font-weight: 700;
+            transition: all 0.18s ease;
+        }
+
+        .filter-chip.active {
+            background: var(--capal-blue-soft);
+            color: var(--capal-blue);
+            border-color: rgba(0, 112, 184, 0.18);
+        }
+
+        .toolbar-side {
+            min-width: 240px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 14px;
+        }
+
+        .toolbar-side .btn-primary {
+            width: 100%;
+        }
+
+        .toolbar-note {
+            max-width: 240px;
+            margin: 0;
+            text-align: right;
+            font-size: 0.83rem;
+            line-height: 1.55;
+            color: var(--text-soft);
+        }
+
+        .message {
+            margin-top: 18px;
+            padding: 14px 16px;
+            border-radius: 16px;
+            font-size: 0.94rem;
+            line-height: 1.5;
+            border: 1px solid transparent;
+        }
+
+        .message.error {
+            background: var(--danger-bg);
+            border-color: rgba(180, 35, 24, 0.18);
+            color: var(--danger);
+        }
+
+        .message.success {
+            background: var(--success-bg);
+            border-color: rgba(27, 110, 55, 0.18);
+            color: var(--success);
+        }
+
+        .users-section {
+            margin-top: 24px;
+            padding: 22px 24px 26px;
+            border-radius: 24px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .section-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 18px;
+        }
+
+        .section-head h2 {
+            margin: 0;
+            font-size: 1.35rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .section-head p {
+            margin: 8px 0 0;
+            font-size: 0.92rem;
+            line-height: 1.55;
+            color: var(--text-muted);
+        }
+
+        .users-list {
+            display: grid;
+            gap: 14px;
+        }
+
+        .user-card {
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.9fr) auto;
+            gap: 16px;
+            align-items: center;
+            padding: 18px 20px;
+            border-radius: 18px;
+            border: 1px solid rgba(31, 47, 32, 0.08);
+            background: linear-gradient(180deg, #ffffff, #fbfdff);
+            transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+        }
+
+        .user-card:hover {
+            transform: translateY(-1px);
+            border-color: rgba(0, 112, 184, 0.16);
+            box-shadow: 0 18px 28px rgba(0, 78, 27, 0.06);
+        }
+
+        .user-main {
+            min-width: 0;
+        }
+
+        .user-name-row {
+            display: flex;
             align-items: center;
             gap: 12px;
             flex-wrap: wrap;
-            margin-bottom: 20px;
         }
-        .header h1 {
+
+        .user-name {
             margin: 0;
-            font-size: 1.6rem;
-            color: #1a73e8;
-        }
-        .header-actions {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-        .btn-link {
-            text-decoration: none;
-            padding: 10px 14px;
-            border-radius: 10px;
-            border: 1px solid #dbe5f4;
-            background: #fff;
-            color: #1f2937;
+            font-size: 1.05rem;
             font-weight: 700;
+            color: var(--text);
         }
-        .grid {
-            display: grid;
-            grid-template-columns: minmax(320px, 420px) 1fr;
-            gap: 20px;
-        }
-        .card {
-            background: #fff;
-            border: 1px solid #dbe5f4;
-            border-radius: 16px;
-            box-shadow: 0 12px 30px rgba(26, 115, 232, 0.08);
-            padding: 20px;
-        }
-        .card h2 {
-            margin: 0 0 16px;
-            font-size: 1.1rem;
-            color: #1f2937;
-        }
-        .field {
-            margin-bottom: 14px;
-        }
-        .field label {
-            display: block;
-            margin-bottom: 6px;
-            font-size: 0.85rem;
-            font-weight: 700;
-            color: #374151;
-        }
-        .field input,
-        .field select {
-            width: 100%;
-            box-sizing: border-box;
-            border: 1px solid #d0d7e2;
-            border-radius: 10px;
-            padding: 10px 12px;
-            font-size: 0.95rem;
-            outline: none;
-            background: #fff;
-        }
-        .field input:focus,
-        .field select:focus {
-            border-color: #1a73e8;
-            box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
-        }
-        .checkbox-row {
-            display: flex;
+
+        .user-login {
+            display: inline-flex;
             align-items: center;
             gap: 8px;
-            margin-bottom: 14px;
-        }
-        .checkbox-stack {
-            display: grid;
-            gap: 10px;
-            margin-bottom: 14px;
-        }
-        .checkbox-panel {
-            border: 1px solid #dbe5f4;
-            border-radius: 12px;
-            padding: 12px;
-            background: #fbfdff;
-        }
-        .checkbox-panel-title {
-            display: block;
-            margin-bottom: 10px;
-            font-size: 0.85rem;
-            font-weight: 700;
-            color: #374151;
-        }
-        .subjects-box {
-            border: 1px solid #dbe5f4;
-            border-radius: 12px;
-            padding: 12px;
-            background: #fbfdff;
-            max-height: 260px;
-            overflow: auto;
-        }
-        .subject-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 0;
-            border-bottom: 1px solid #edf2fa;
-        }
-        .subject-item:last-child {
-            border-bottom: none;
-        }
-        .actions {
-            display: flex;
-            gap: 8px;
-            margin-top: 16px;
-            flex-wrap: wrap;
-        }
-        .btn-primary {
-            border: none;
-            border-radius: 10px;
-            padding: 10px 14px;
-            background: #1a73e8;
-            color: #fff;
-            font-weight: 700;
-            cursor: pointer;
-        }
-        .btn-secondary {
-            border: 1px solid #d0d7e2;
-            border-radius: 10px;
-            padding: 10px 14px;
-            background: #fff;
-            color: #374151;
-            font-weight: 700;
-            cursor: pointer;
-        }
-        .message {
-            margin-bottom: 16px;
-            padding: 10px 12px;
-            border-radius: 10px;
+            margin-top: 8px;
             font-size: 0.9rem;
+            color: var(--text-muted);
         }
-        .message.error {
-            background: #fff1f2;
-            border: 1px solid #f5c2c7;
-            color: #b42318;
-        }
-        .message.success {
-            background: #eefbf1;
-            border: 1px solid #b7e4c7;
-            color: #1b6e37;
-        }
-        .users-list {
+
+        .user-summary {
             display: grid;
-            gap: 16px;
+            grid-template-columns: repeat(auto-fit, minmax(124px, 1fr));
+            gap: 10px;
         }
-        .user-card {
-            border: 1px solid #e4e9f2;
+
+        .summary-tile {
+            padding: 12px 13px;
             border-radius: 14px;
-            padding: 16px;
-            background: #fcfdff;
+            border: 1px solid rgba(31, 47, 32, 0.07);
+            background: var(--surface-soft);
         }
-        .user-card-header {
+
+        .summary-tile strong {
+            display: block;
+            font-size: 1rem;
+            color: var(--text);
+        }
+
+        .summary-tile span {
+            display: block;
+            margin-top: 4px;
+            font-size: 0.78rem;
+            color: var(--text-soft);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-weight: 700;
+        }
+
+        .user-actions {
             display: flex;
-            justify-content: space-between;
             align-items: center;
             gap: 10px;
-            flex-wrap: wrap;
-            margin-bottom: 14px;
+            justify-content: flex-end;
         }
-        .user-title {
+
+        .chip-row {
             display: flex;
-            flex-direction: column;
-            gap: 4px;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
         }
+
         .chip {
             display: inline-flex;
             align-items: center;
-            padding: 4px 10px;
+            gap: 6px;
+            min-height: 30px;
+            padding: 0 11px;
             border-radius: 999px;
-            font-size: 0.75rem;
+            font-size: 0.77rem;
+            font-weight: 700;
+            border: 1px solid transparent;
+        }
+
+        .chip.admin {
+            background: rgba(0, 112, 184, 0.12);
+            color: var(--capal-blue);
+            border-color: rgba(0, 112, 184, 0.14);
+        }
+
+        .chip.subject {
+            background: rgba(57, 121, 31, 0.1);
+            color: var(--capal-green);
+            border-color: rgba(57, 121, 31, 0.12);
+        }
+
+        .chip.active {
+            background: rgba(27, 110, 55, 0.1);
+            color: var(--success);
+            border-color: rgba(27, 110, 55, 0.12);
+        }
+
+        .chip.inactive {
+            background: rgba(125, 139, 130, 0.12);
+            color: #5d6961;
+            border-color: rgba(125, 139, 130, 0.12);
+        }
+
+        .chip.metric {
+            background: #f5f8fb;
+            color: #35558a;
+            border-color: rgba(0, 112, 184, 0.08);
+        }
+
+        .empty-state {
+            padding: 38px 20px;
+            text-align: center;
+            border: 1px dashed rgba(31, 47, 32, 0.12);
+            border-radius: 18px;
+            color: var(--text-muted);
+            background: var(--surface-soft);
+        }
+
+        .modal {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: rgba(15, 23, 42, 0.48);
+            z-index: 1000;
+        }
+
+        .modal.open {
+            display: flex;
+        }
+
+        .modal-dialog {
+            width: min(1040px, 100%);
+            max-height: calc(100vh - 48px);
+            display: flex;
+            flex-direction: column;
+            border-radius: 28px;
+            overflow: hidden;
+            background: #fff;
+            box-shadow: var(--shadow-modal);
+            border: 1px solid rgba(255, 255, 255, 0.35);
+        }
+
+        .modal-dialog form {
+            display: flex;
+            flex: 1;
+            flex-direction: column;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            align-items: flex-start;
+            padding: 26px 28px 18px;
+            border-bottom: 1px solid rgba(31, 47, 32, 0.08);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 248, 0.96)),
+                linear-gradient(135deg, rgba(0, 112, 184, 0.03), rgba(57, 121, 31, 0.04));
+        }
+
+        .modal-header-main {
+            flex: 1;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: var(--capal-dark-green);
+        }
+
+        .modal-header p {
+            margin: 8px 0 0;
+            font-size: 0.92rem;
+            line-height: 1.55;
+            color: var(--text-muted);
+        }
+
+        .modal-close {
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            border: 1px solid rgba(31, 47, 32, 0.08);
+            background: #fff;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 1rem;
+        }
+
+        .modal-body {
+            flex: 1;
+            min-height: 0;
+            padding: 22px 28px 0;
+            overflow: auto;
+        }
+
+        .modal-summary {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .summary-card {
+            padding: 14px 16px;
+            border-radius: 16px;
+            background: linear-gradient(180deg, #ffffff, #f8fbfc);
+            border: 1px solid rgba(31, 47, 32, 0.08);
+        }
+
+        .summary-card span {
+            display: block;
+            font-size: 0.76rem;
+            color: var(--text-soft);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
             font-weight: 700;
         }
-        .chip.admin {
-            background: #e8f0fe;
-            color: #1a73e8;
+
+        .summary-card strong {
+            display: block;
+            margin-top: 6px;
+            font-size: 0.98rem;
+            color: var(--text);
         }
-        .chip.subject {
-            background: #eef6ec;
-            color: #2e7d32;
+
+        .wizard-steps {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 18px;
         }
-        .chip.inactive {
-            background: #f5f5f5;
-            color: #616161;
+
+        .wizard-step {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            min-height: 48px;
+            padding: 0 14px 0 10px;
+            border: 1px solid rgba(31, 47, 32, 0.08);
+            background: #fff;
+            color: var(--text-muted);
+            border-radius: 16px;
+            font: inherit;
+            font-size: 0.88rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.18s ease;
         }
-        .user-meta {
-            font-size: 0.82rem;
-            color: #6b7280;
-        }
-        .hint {
-            font-size: 0.82rem;
-            color: #6b7280;
-            line-height: 1.45;
-            margin-top: 8px;
-        }
-        .panel-help {
-            margin-top: 10px;
+
+        .wizard-step-index {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 999px;
+            background: rgba(101, 117, 106, 0.12);
+            color: var(--text-muted);
             font-size: 0.8rem;
-            color: #6b7280;
-            line-height: 1.5;
+            font-weight: 800;
         }
-        @media (max-width: 960px) {
-            .grid {
+
+        .wizard-step-label {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            line-height: 1.2;
+        }
+
+        .wizard-step-label small {
+            font-size: 0.72rem;
+            color: var(--text-soft);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .wizard-step.active {
+            background: var(--capal-blue-soft);
+            border-color: rgba(0, 112, 184, 0.18);
+            color: var(--capal-blue);
+        }
+
+        .wizard-step.active .wizard-step-index,
+        .wizard-step.completed .wizard-step-index {
+            background: rgba(0, 112, 184, 0.14);
+            color: var(--capal-blue);
+        }
+
+        .wizard-step.completed {
+            border-color: rgba(57, 121, 31, 0.16);
+            color: var(--capal-green);
+            background: rgba(57, 121, 31, 0.08);
+        }
+
+        .tab-panel {
+            display: none;
+            padding-bottom: 20px;
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        .tab-panel.active {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .tab-panel.is-animating {
+            animation: wizardStepFade 220ms ease forwards;
+        }
+
+        @keyframes wizardStepFade {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .section-card {
+            padding: 20px;
+            border-radius: 18px;
+            border: 1px solid rgba(31, 47, 32, 0.08);
+            background: var(--surface-soft);
+        }
+
+        .section-card + .section-card {
+            margin-top: 16px;
+        }
+
+        .section-card h4 {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .title-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .tooltip {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .tooltip-icon {
+            width: 22px;
+            height: 22px;
+            border-radius: 999px;
+            border: 1px solid rgba(0, 112, 184, 0.16);
+            background: rgba(0, 112, 184, 0.08);
+            color: var(--capal-blue);
+            font-size: 0.74rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: help;
+        }
+
+        .tooltip-box {
+            position: absolute;
+            left: 50%;
+            bottom: calc(100% + 10px);
+            transform: translateX(-50%) translateY(4px);
+            min-width: 220px;
+            max-width: 280px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: rgba(19, 29, 25, 0.94);
+            color: #fff;
+            font-size: 0.78rem;
+            line-height: 1.45;
+            box-shadow: 0 18px 28px rgba(15, 23, 42, 0.22);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.16s ease, transform 0.16s ease;
+            z-index: 5;
+        }
+
+        .tooltip:hover .tooltip-box,
+        .tooltip:focus-within .tooltip-box {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .fields-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+        }
+
+        .field {
+            margin-bottom: 16px;
+        }
+
+        .field.full {
+            grid-column: 1 / -1;
+        }
+
+        .field label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 0.86rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .field input,
+        .field select,
+        .section-search input {
+            width: 100%;
+            min-height: 46px;
+            border: 1px solid rgba(31, 47, 32, 0.12);
+            border-radius: var(--radius-control);
+            padding: 0 14px;
+            font: inherit;
+            color: var(--text);
+            background: #fff;
+            outline: none;
+        }
+
+        .field-static {
+            display: flex;
+            align-items: center;
+            min-height: 46px;
+            padding: 0 14px;
+            border-radius: var(--radius-control);
+            border: 1px solid rgba(31, 47, 32, 0.08);
+            background: rgba(255, 255, 255, 0.7);
+            color: var(--text-muted);
+            font-size: 0.94rem;
+            font-weight: 600;
+        }
+
+        .switch-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(31, 47, 32, 0.08);
+            background: #fff;
+        }
+
+        .switch-row + .switch-row {
+            margin-top: 10px;
+        }
+
+        .section-search {
+            margin-bottom: 12px;
+        }
+
+        .selector-box {
+            display: grid;
+            gap: 10px;
+            max-height: 280px;
+            overflow: auto;
+            padding: 6px;
+            border-radius: 16px;
+            border: 1px solid rgba(31, 47, 32, 0.08);
+            background: #fff;
+        }
+
+        .selector-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 12px 12px;
+            border-radius: 14px;
+            border: 1px solid transparent;
+            background: #f9fbfc;
+            transition: border-color 0.18s ease, background 0.18s ease;
+        }
+
+        .selector-item:hover {
+            border-color: rgba(0, 112, 184, 0.12);
+            background: #f3f8fd;
+        }
+
+        .selector-item strong {
+            display: block;
+            font-size: 0.88rem;
+            color: var(--text);
+        }
+
+        .selector-item .selector-meta {
+            display: block;
+            margin-top: 4px;
+            font-size: 0.78rem;
+            line-height: 1.45;
+            color: var(--text-soft);
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+            padding: 18px 28px 24px;
+            border-top: 1px solid rgba(31, 47, 32, 0.08);
+            background: #fff;
+            position: sticky;
+            bottom: 0;
+            z-index: 2;
+            flex-shrink: 0;
+        }
+
+        .modal-footer .hint {
+            margin: 0;
+            max-width: 520px;
+            flex: 1 1 280px;
+            font-size: 0.82rem;
+            color: var(--text-soft);
+            line-height: 1.55;
+        }
+
+        .footer-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            align-items: center;
+            margin-left: auto;
+        }
+
+        .wizard-nav {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            border: 0;
+        }
+
+        @media (max-width: 1080px) {
+            .user-card {
                 grid-template-columns: 1fr;
+            }
+
+            .user-actions {
+                justify-content: flex-start;
+            }
+        }
+
+        @media (max-width: 860px) {
+            .page {
+                padding: 20px 16px 40px;
+            }
+
+            .hero,
+            .toolbar,
+            .users-section {
+                padding: 20px;
+                border-radius: 22px;
+            }
+
+            .hero-actions,
+            .toolbar-side {
+                width: 100%;
+                align-items: stretch;
+            }
+
+            .toolbar-note {
+                max-width: none;
+                text-align: left;
+            }
+
+            .fields-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .modal-summary {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .modal {
+                padding: 12px;
+            }
+
+            .modal-header,
+            .modal-body,
+            .modal-footer {
+                padding-left: 18px;
+                padding-right: 18px;
+            }
+
+            .footer-actions {
+                width: 100%;
+                margin-left: 0;
+            }
+        }
+
+        @media (max-width: 560px) {
+            .modal-summary {
+                grid-template-columns: 1fr;
+            }
+
+            .wizard-steps {
+                flex-direction: column;
             }
         }
     </style>
 </head>
 <body>
-    <div class="page">
-        <div class="header">
-            <div>
-                <h1>Usuarios e Assuntos</h1>
-                <div class="user-meta">Administrador: {{ current_user.display_name if current_user else '' }}</div>
+    {% macro render_form_modal(modal_id, modal_title, modal_text, action, user=None) %}
+    {% set is_create = action == 'create_user' %}
+    {% set user_profile = 'subject' if is_create else (user.profile if user else 'subject') %}
+    {% set chart_codes = available_chart_statuses | map(attribute='code') | list if is_create else (user.chart_status_codes if user else []) %}
+    {% set kanban_codes = available_kanban_statuses | map(attribute='code') | list if is_create else (user.kanban_status_codes if user else []) %}
+    {% set subject_codes = [] if is_create else (user.subjects | map(attribute='cod_assunto') | list if user else []) %}
+    {% set department_codes = [] if is_create else (user.departments | map(attribute='cod_depar') | list if user else []) %}
+    {% set step_count = 4 if user_profile != 'admin' else 3 %}
+    <div class="modal" id="{{ modal_id }}" onclick="handleModalBackdrop(event, '{{ modal_id }}')">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <div class="modal-header-main">
+                    <h3>{{ modal_title }}</h3>
+                    <p>{{ modal_text }}</p>
+                </div>
+                <button type="button" class="modal-close" aria-label="Fechar" onclick="closeModal('{{ modal_id }}')">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
-            <div class="header-actions">
-                <a href="/" class="btn-link">Dashboard</a>
-                <a href="/chamados" class="btn-link">Chamados</a>
-                <a href="/logout" class="btn-link">Sair</a>
-            </div>
+            <form method="post" action="{{ url_for('web.manage_users') }}">
+                <input type="hidden" name="action" value="{{ action }}">
+                {% if user %}
+                <input type="hidden" name="user_id" value="{{ user.id }}">
+                {% endif %}
+                <div class="modal-body">
+                    <div class="modal-summary">
+                        <div class="summary-card">
+                            <span>Perfil</span>
+                            <strong data-summary-profile>{{ 'Administrador' if user_profile == 'admin' else 'Usuario por assunto' }}</strong>
+                        </div>
+                        <div class="summary-card">
+                            <span>Dashboard</span>
+                            <strong data-summary-dashboard>
+                                {% if (is_create or user.chart_show_external) and (is_create or user.chart_show_internal) %}
+                                Externo e interno
+                                {% elif is_create or user.chart_show_external %}
+                                Externo
+                                {% elif user and user.chart_show_internal %}
+                                Interno
+                                {% else %}
+                                Sem exibicao
+                                {% endif %}
+                            </strong>
+                        </div>
+                        <div class="summary-card">
+                            <span>Kanban</span>
+                            <strong data-summary-kanban>{{ kanban_codes | length }} status selecionados</strong>
+                        </div>
+                        <div class="summary-card">
+                            <span>Escopo</span>
+                            <strong data-summary-subjects>
+                                {% if user_profile == 'admin' %}
+                                Acesso total{% if department_codes %} • {{ department_codes | length }} depto filtro{% endif %}
+                                {% else %}
+                                {{ subject_codes | length }} assuntos{% if department_codes %} • {{ department_codes | length }} depto filtro{% endif %}
+                                {% endif %}
+                            </strong>
+                        </div>
+                    </div>
+
+                    <div class="wizard-steps">
+                        <button type="button" class="wizard-step active" data-tab-button data-tab-target="dados" onclick="activateTab('{{ modal_id }}', 'dados')">
+                            <span class="wizard-step-index">1</span>
+                            <span class="wizard-step-label"><small>Etapa 1</small>Dados</span>
+                        </button>
+                        <button type="button" class="wizard-step" data-tab-button data-tab-target="dashboard" onclick="activateTab('{{ modal_id }}', 'dashboard')">
+                            <span class="wizard-step-index">2</span>
+                            <span class="wizard-step-label"><small>Etapa 2</small>Dashboard</span>
+                        </button>
+                        <button type="button" class="wizard-step" data-tab-button data-tab-target="kanban" onclick="activateTab('{{ modal_id }}', 'kanban')">
+                            <span class="wizard-step-index">3</span>
+                            <span class="wizard-step-label"><small>Etapa 3</small>Kanban</span>
+                        </button>
+                        <button type="button" class="wizard-step" data-tab-button data-tab-target="assuntos" data-profile-tab onclick="activateTab('{{ modal_id }}', 'assuntos')">
+                            <span class="wizard-step-index">{{ step_count }}</span>
+                            <span class="wizard-step-label"><small>Ultima etapa</small>Assuntos</span>
+                        </button>
+                    </div>
+
+                    <div class="tab-panel active" data-tab-panel="dados">
+                        <div class="section-card">
+                            <div class="title-row">
+                                <h4>Dados principais</h4>
+                                <span class="tooltip">
+                                    <button type="button" class="tooltip-icon" aria-label="Ajuda sobre dados principais">?</button>
+                                    <span class="tooltip-box">Cadastre as informacoes basicas primeiro. As permissoes de dashboard, kanban e assuntos ficam nas proximas etapas.</span>
+                                </span>
+                            </div>
+                            <div class="fields-grid">
+                                <div class="field">
+                                    <label for="{{ modal_id }}-display-name">Nome</label>
+                                    <input id="{{ modal_id }}-display-name" name="display_name" type="text" value="{{ '' if is_create else user.display_name }}" required>
+                                </div>
+                                <div class="field">
+                                    <label for="{{ modal_id }}-profile">Perfil
+                                        <span class="tooltip">
+                                            <button type="button" class="tooltip-icon" aria-label="Ajuda sobre perfil">?</button>
+                                            <span class="tooltip-box">Administrador enxerga tudo. Usuario por assunto depende da selecao de assuntos da ultima etapa.</span>
+                                        </span>
+                                    </label>
+                                    <select id="{{ modal_id }}-profile" name="profile" onchange="syncProfileSections('{{ modal_id }}'); updateModalSummary('{{ modal_id }}');">
+                                        <option value="subject" {% if user_profile != 'admin' %}selected{% endif %}>Usuario por assunto</option>
+                                        <option value="admin" {% if user_profile == 'admin' %}selected{% endif %}>Administrador</option>
+                                    </select>
+                                </div>
+                                {% if is_create %}
+                                <div class="field">
+                                    <label for="{{ modal_id }}-username">Usuario</label>
+                                    <input id="{{ modal_id }}-username" name="username" type="text" autocomplete="username" required>
+                                </div>
+                                <div class="field">
+                                    <label for="{{ modal_id }}-password">Senha</label>
+                                    <input id="{{ modal_id }}-password" name="password" type="password" autocomplete="new-password" required>
+                                </div>
+                                <div class="field full">
+                                    <label for="{{ modal_id }}-confirm-password">Confirmar senha</label>
+                                    <input id="{{ modal_id }}-confirm-password" name="confirm_password" type="password" autocomplete="new-password" required>
+                                </div>
+                                {% else %}
+                                <div class="field">
+                                    <label>Usuario</label>
+                                    <div class="field-static">@{{ user.username }}</div>
+                                </div>
+                                <div class="field">
+                                    <label for="{{ modal_id }}-password">Nova senha</label>
+                                    <input id="{{ modal_id }}-password" name="password" type="password" placeholder="Deixe em branco para manter">
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="switch-row">
+                                <input id="{{ modal_id }}-active" name="is_active" type="checkbox" value="1" {% if is_create or user.is_active %}checked{% endif %} onchange="updateModalSummary('{{ modal_id }}')">
+                                <label for="{{ modal_id }}-active" style="margin: 0;">Usuario ativo</label>
+                            </div>
+                        </div>
+                        <div class="section-card">
+                            <div class="title-row">
+                                <h4>Departamento para Ult. Iteracao</h4>
+                                <span class="tooltip">
+                                    <button type="button" class="tooltip-icon" aria-label="Ajuda sobre departamento do usuario">?</button>
+                                    <span class="tooltip-box">Esse departamento serve apenas para limitar os nomes exibidos no filtro "Ult. Iteracao" da tela /chamados. Nao altera escopo, dashboard nem kanban.</span>
+                                </span>
+                            </div>
+                            <div class="section-search">
+                                <input type="text" placeholder="Pesquisar departamento..." oninput="filterSelectorList(this, '{{ modal_id }}-departments-list')">
+                            </div>
+                            <div class="selector-box" id="{{ modal_id }}-departments-list">
+                                {% for department in available_departments %}
+                                <label class="selector-item" data-filter-text="{{ (department.cod_depar ~ ' ' ~ department.nome_departamento)|lower }}">
+                                    <input type="checkbox" name="department_codes" value="{{ department.cod_depar }}" {% if department.cod_depar in department_codes %}checked{% endif %} onchange="updateModalSummary('{{ modal_id }}')">
+                                    <span>
+                                        <strong>{{ department.cod_depar }} - {{ department.nome_departamento }}</strong>
+                                    </span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-panel" data-tab-panel="dashboard">
+                        <div class="section-card">
+                            <div class="title-row">
+                                <h4>Configuracoes da dashboard</h4>
+                                <span class="tooltip">
+                                    <button type="button" class="tooltip-icon" aria-label="Ajuda sobre dashboard">?</button>
+                                    <span class="tooltip-box">Aqui voce controla o que entra no grafico da dashboard: status externos, tipos internos e quais status compoem a visualizacao.</span>
+                                </span>
+                            </div>
+                            <div class="switch-row">
+                                <input id="{{ modal_id }}-chart-external" name="chart_show_external" type="checkbox" value="1" {% if is_create or user.chart_show_external %}checked{% endif %} onchange="updateModalSummary('{{ modal_id }}')">
+                                <label for="{{ modal_id }}-chart-external" style="margin: 0;">Exibir Status (Externo)</label>
+                            </div>
+                            <div class="switch-row">
+                                <input id="{{ modal_id }}-chart-internal" name="chart_show_internal" type="checkbox" value="1" {% if is_create or user.chart_show_internal %}checked{% endif %} onchange="updateModalSummary('{{ modal_id }}')">
+                                <label for="{{ modal_id }}-chart-internal" style="margin: 0;">Exibir Tipos (Interno)</label>
+                            </div>
+                        </div>
+                        <div class="section-card">
+                            <div class="title-row">
+                                <h4>Status usados no grafico externo</h4>
+                                <span class="tooltip">
+                                    <button type="button" class="tooltip-icon" aria-label="Ajuda sobre status do grafico">?</button>
+                                    <span class="tooltip-box">Os status marcados entram no anel externo da dashboard. IM e AB somam em Aberta. EA e AN somam em Em andamento.</span>
+                                </span>
+                            </div>
+                            <div class="selector-box">
+                                {% for status in available_chart_statuses %}
+                                <label class="selector-item">
+                                    <input type="checkbox" name="chart_status_codes" value="{{ status.code }}" {% if status.code in chart_codes %}checked{% endif %} onchange="updateModalSummary('{{ modal_id }}')">
+                                    <span>
+                                        <strong>{{ status.code }} - {{ status.label }}</strong>
+                                    </span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-panel" data-tab-panel="kanban">
+                        <div class="section-card">
+                            <div class="title-row">
+                                <h4>Configuracoes do kanban</h4>
+                                <span class="tooltip">
+                                    <button type="button" class="tooltip-icon" aria-label="Ajuda sobre kanban">?</button>
+                                    <span class="tooltip-box">Esses status controlam quais colunas aparecem no quadro. A ordem das colunas ainda pode ser ajustada pelo proprio usuario dentro do kanban.</span>
+                                </span>
+                            </div>
+                            <div class="selector-box">
+                                {% for status in available_kanban_statuses %}
+                                <label class="selector-item">
+                                    <input type="checkbox" name="kanban_status_codes" value="{{ status.code }}" {% if status.code in kanban_codes %}checked{% endif %} onchange="updateModalSummary('{{ modal_id }}')">
+                                    <span>
+                                        <strong>{{ status.code }} - {{ status.label }}</strong>
+                                    </span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-panel" data-tab-panel="assuntos" data-profile-panel>
+                        <div class="section-card">
+                            <div class="title-row">
+                                <h4>Assuntos permitidos</h4>
+                                <span class="tooltip">
+                                    <button type="button" class="tooltip-icon" aria-label="Ajuda sobre assuntos">?</button>
+                                    <span class="tooltip-box">Para usuario por assunto, selecione apenas os assuntos que ele pode visualizar no sistema. Administrador ignora essa etapa.</span>
+                                </span>
+                            </div>
+                            <div class="section-search">
+                                <input type="text" placeholder="Pesquisar assunto..." oninput="filterSelectorList(this, '{{ modal_id }}-subjects-list')">
+                            </div>
+                            <div class="selector-box" id="{{ modal_id }}-subjects-list">
+                                {% for subject in available_subjects %}
+                                <label class="selector-item" data-filter-text="{{ (subject.cod_assunto ~ ' ' ~ subject.descr_assunto)|lower }}">
+                                    <input type="checkbox" name="subject_codes" value="{{ subject.cod_assunto }}" {% if subject.cod_assunto in subject_codes %}checked{% endif %} onchange="updateModalSummary('{{ modal_id }}')">
+                                    <span>
+                                        <strong>{{ subject.cod_assunto }} - {{ subject.descr_assunto }}</strong>
+                                    </span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <p class="hint">
+                        {% if is_create %}
+                        Avance etapa por etapa para configurar!
+                        {% else %}
+                        Alteracoes de escopo e exibicao passam a valer integralmente apos o usuario sair e entrar novamente no sistema.
+                        {% endif %}
+                    </p>
+                    <div class="footer-actions">
+                        <div class="wizard-nav">
+                            <button type="button" class="btn-ghost" data-wizard-prev onclick="goWizardStep('{{ modal_id }}', -1)">
+                                <i class="fas fa-arrow-left"></i> Voltar
+                            </button>
+                            <button type="button" class="btn-secondary" data-wizard-next onclick="goWizardStep('{{ modal_id }}', 1)">
+                                Proximo <i class="fas fa-arrow-right"></i>
+                            </button>
+                        </div>
+                        <button type="button" class="btn-secondary" onclick="closeModal('{{ modal_id }}')">Cancelar</button>
+                        <button type="submit" class="btn-primary" data-wizard-submit>
+                            <i class="fas {{ 'fa-user-plus' if is_create else 'fa-save' }}"></i>
+                            {{ 'Cadastrar usuario' if is_create else 'Salvar alteracoes' }}
+                        </button>
+                    </div>
+                </div>
+            </form>
         </div>
+    </div>
+    {% endmacro %}
+
+    <div class="page">
+        <section class="hero">
+            <div class="hero-main">
+                <span class="eyebrow"><i class="fas fa-users-cog"></i> Administracao de acessos</span>
+                <h1>Usuarios, assuntos e exibicao do sistema</h1>
+                <p>
+                    Gerencie acessos do SGC com uma interface mais limpa, separando dados basicos, dashboard, kanban e assuntos
+                    em fluxos mais organizados e mais faceis de manter.
+                </p>
+                <div class="hero-meta">
+                    <div class="hero-meta-card">
+                        <span class="hero-meta-label">Administrador atual</span>
+                        <strong class="hero-meta-value">{{ current_user.display_name if current_user else '' }}</strong>
+                    </div>
+                    <div class="hero-meta-card">
+                        <span class="hero-meta-label">Usuarios cadastrados</span>
+                        <strong class="hero-meta-value">{{ managed_users | length }}</strong>
+                    </div>
+                </div>
+            </div>
+            <div class="hero-actions">
+                <div class="top-links">
+                    <a href="/" class="btn-link"><i class="fas fa-chart-line"></i> Dashboard</a>
+                    <a href="/chamados" class="btn-link"><i class="fas fa-table-columns"></i> Chamados</a>
+                    <a href="/logout" class="btn-link"><i class="fas fa-arrow-right-from-bracket"></i> Sair</a>
+                </div>
+                <button type="button" class="btn-primary" onclick="openModal('modal-create-user')">
+                    <i class="fas fa-user-plus"></i> Novo usuario
+                </button>
+            </div>
+        </section>
+
+        <section class="toolbar">
+            <div class="toolbar-main">
+                <div class="search-wrap">
+                    <i class="fas fa-search"></i>
+                    <input id="user-search" class="search-input" type="text" placeholder="Pesquisar usuario por nome ou login..." oninput="applyUserFilters()">
+                </div>
+                <div class="filter-row">
+                    <button type="button" class="filter-chip active" data-filter-chip="all" onclick="setUserFilter('all')">Todos</button>
+                    <button type="button" class="filter-chip" data-filter-chip="admin" onclick="setUserFilter('admin')">Administradores</button>
+                    <button type="button" class="filter-chip" data-filter-chip="subject" onclick="setUserFilter('subject')">Usuarios</button>
+                    <button type="button" class="filter-chip" data-filter-chip="active" onclick="setUserFilter('active')">Ativos</button>
+                    <button type="button" class="filter-chip" data-filter-chip="inactive" onclick="setUserFilter('inactive')">Inativos</button>
+                </div>
+            </div>
+            <div class="toolbar-side">
+                <button type="button" class="btn-secondary" onclick="clearUserFilters()">
+                    <i class="fas fa-rotate-left"></i> Limpar filtros
+                </button>
+                <p class="toolbar-note">
+                    A lista abaixo mostra apenas o resumo de cada usuario. A edicao detalhada acontece em modal para reduzir a poluicao visual.
+                </p>
+            </div>
+        </section>
 
         {% if error %}
         <div class="message error">{{ error }}</div>
@@ -255,230 +1378,369 @@
         <div class="message success">{{ success }}</div>
         {% endif %}
 
-        <div class="grid">
-            <div class="card">
-                <h2>Novo Usuario</h2>
-                <form method="post" action="{{ url_for('web.manage_users') }}">
-                    <input type="hidden" name="action" value="create_user">
-                    <div class="field">
-                        <label for="display_name">Nome</label>
-                        <input id="display_name" name="display_name" type="text" required>
-                    </div>
-                    <div class="field">
-                        <label for="username">Usuario</label>
-                        <input id="username" name="username" type="text" autocomplete="username" required>
-                    </div>
-                    <div class="field">
-                        <label for="password">Senha</label>
-                        <input id="password" name="password" type="password" autocomplete="new-password" required>
-                    </div>
-                    <div class="field">
-                        <label for="confirm_password">Confirmar senha</label>
-                        <input id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" required>
-                    </div>
-                    <div class="field">
-                        <label for="profile">Perfil</label>
-                        <select id="profile" name="profile" onchange="toggleSubjectBox(this, 'create-subjects-box')">
-                            <option value="subject">Usuario por assunto</option>
-                            <option value="admin">Administrador</option>
-                        </select>
-                    </div>
-                    <div class="checkbox-row">
-                        <input id="is_active" name="is_active" type="checkbox" value="1" checked>
-                        <label for="is_active" style="margin: 0;">Usuario ativo</label>
-                    </div>
-                    <div class="checkbox-panel">
-                        <span class="checkbox-panel-title">Grafico da Dashboard</span>
-                        <div class="checkbox-stack">
-                            <label class="checkbox-row" style="margin: 0;">
-                                <input id="chart_show_external" name="chart_show_external" type="checkbox" value="1" checked>
-                                <span>Exibir Status (Externo)</span>
-                            </label>
-                            <label class="checkbox-row" style="margin: 0;">
-                                <input id="chart_show_internal" name="chart_show_internal" type="checkbox" value="1" checked>
-                                <span>Exibir Tipos (Interno)</span>
-                            </label>
-                        </div>
-                        <div class="panel-help">
-                            `Status (Externo)` mostra a distribuicao por etapas do chamado, como Aberta, Aguardando, Em Andamento e Avaliacao.
-                            `Tipos (Interno)` mostra a classificacao interna, como Incidente, Requisicao e BI.
-                        </div>
-                    </div>
-                    <div class="checkbox-panel">
-                        <span class="checkbox-panel-title">Status usados no grafico externo</span>
-                        <div class="subjects-box">
-                            {% for status in available_chart_statuses %}
-                            <label class="subject-item">
-                                <input type="checkbox" name="chart_status_codes" value="{{ status.code }}" checked>
-                                <span>{{ status.code }} - {{ status.label }}</span>
-                            </label>
-                            {% endfor %}
-                        </div>
-                        <div class="panel-help">
-                            Esses status definem quais etapas entram na legenda e no anel externo do grafico.
-                            Se marcar `IM` e `AB`, ambos entram somados em `Aberta`. O mesmo vale para `EA` e `AN` em `Em andamento`.
-                        </div>
-                    </div>
-                    <div class="checkbox-panel">
-                        <span class="checkbox-panel-title">Status exibidos no kanban</span>
-                        <div class="subjects-box">
-                            {% for status in available_kanban_statuses %}
-                            <label class="subject-item">
-                                <input type="checkbox" name="kanban_status_codes" value="{{ status.code }}" checked>
-                                <span>{{ status.code }} - {{ status.label }}</span>
-                            </label>
-                            {% endfor %}
-                        </div>
-                        <div class="panel-help">
-                            Esses status controlam quais colunas aparecem no quadro de chamados desse usuario.
-                            O kanban usa configuracao propria, separada do grafico da dashboard.
-                        </div>
-                    </div>
-                    <div id="create-subjects-box">
-                        <label style="display:block; margin-bottom: 8px; font-size: 0.85rem; font-weight: 700; color: #374151;">Assuntos permitidos</label>
-                        <div class="subjects-box">
-                            {% for subject in available_subjects %}
-                            <label class="subject-item">
-                                <input type="checkbox" name="subject_codes" value="{{ subject.cod_assunto }}">
-                                <span>{{ subject.cod_assunto }} - {{ subject.descr_assunto }}</span>
-                            </label>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    <div class="actions">
-                        <button type="submit" class="btn-primary">Cadastrar usuario</button>
-                    </div>
-                    <div class="hint">
-                        Para perfis comuns, selecione um ou mais assuntos. Exemplo: T.I = 3, 4, 19.
-                    </div>
-                </form>
+        <section class="users-section">
+            <div class="section-head">
+                <div>
+                    <h2>Usuarios cadastrados</h2>
+                    <p>Resumo compacto com perfil, ultimo acesso, exibicao da dashboard, kanban e quantidade de assuntos vinculados.</p>
+                </div>
+                <div class="chip metric">
+                    <i class="fas fa-list"></i>
+                    <span id="visible-users-count">{{ managed_users | length }}</span> visiveis
+                </div>
             </div>
 
-            <div class="card">
-                <h2>Usuarios Cadastrados</h2>
-                <div class="users-list">
-                    {% for user in managed_users %}
-                    <div class="user-card">
-                        <div class="user-card-header">
-                            <div class="user-title">
-                                <strong>{{ user.display_name }}</strong>
-                                <span class="user-meta">@{{ user.username }}</span>
-                            </div>
-                            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                                <span class="chip {{ 'admin' if user.profile == 'admin' else 'subject' }}">
-                                    {{ 'Administrador' if user.profile == 'admin' else 'Por Assunto' }}
-                                </span>
-                                {% if not user.is_active %}
-                                <span class="chip inactive">Inativo</span>
-                                {% endif %}
-                            </div>
+            <div class="users-list" id="users-list">
+                {% for user in managed_users %}
+                <article
+                    class="user-card"
+                    data-user-card
+                    data-search-text="{{ (user.display_name ~ ' ' ~ user.username)|lower }}"
+                    data-profile="{{ user.profile }}"
+                    data-active="{{ 'true' if user.is_active else 'false' }}"
+                >
+                    <div class="user-main">
+                        <div class="user-name-row">
+                            <h3 class="user-name">{{ user.display_name }}</h3>
+                            <span class="chip {{ 'admin' if user.profile == 'admin' else 'subject' }}">
+                                <i class="fas {{ 'fa-shield-halved' if user.profile == 'admin' else 'fa-user' }}"></i>
+                                {{ 'Administrador' if user.profile == 'admin' else 'Usuario' }}
+                            </span>
+                            <span class="chip {{ 'active' if user.is_active else 'inactive' }}">
+                                <i class="fas {{ 'fa-circle-check' if user.is_active else 'fa-circle-pause' }}"></i>
+                                {{ 'Ativo' if user.is_active else 'Inativo' }}
+                            </span>
                         </div>
-                        <form method="post" action="{{ url_for('web.manage_users') }}">
-                            <input type="hidden" name="action" value="update_user">
-                            <input type="hidden" name="user_id" value="{{ user.id }}">
-                            <div class="field">
-                                <label>Nome</label>
-                                <input name="display_name" type="text" value="{{ user.display_name }}" required>
-                            </div>
-                            <div class="field">
-                                <label>Perfil</label>
-                                <select name="profile" onchange="toggleSubjectBox(this, 'subjects-box-{{ user.id }}')">
-                                    <option value="subject" {% if user.profile != 'admin' %}selected{% endif %}>Usuario por assunto</option>
-                                    <option value="admin" {% if user.profile == 'admin' %}selected{% endif %}>Administrador</option>
-                                </select>
-                            </div>
-                            <div class="field">
-                                <label>Nova senha</label>
-                                <input name="password" type="password" placeholder="Deixe em branco para manter">
-                            </div>
-                            <div class="checkbox-row">
-                                <input id="active-{{ user.id }}" name="is_active" type="checkbox" value="1" {% if user.is_active %}checked{% endif %}>
-                                <label for="active-{{ user.id }}" style="margin: 0;">Usuario ativo</label>
-                            </div>
-                            <div class="checkbox-panel">
-                                <span class="checkbox-panel-title">Grafico da Dashboard</span>
-                                <div class="checkbox-stack">
-                                    <label class="checkbox-row" style="margin: 0;">
-                                        <input id="external-{{ user.id }}" name="chart_show_external" type="checkbox" value="1" {% if user.chart_show_external %}checked{% endif %}>
-                                        <span>Exibir Status (Externo)</span>
-                                    </label>
-                                    <label class="checkbox-row" style="margin: 0;">
-                                        <input id="internal-{{ user.id }}" name="chart_show_internal" type="checkbox" value="1" {% if user.chart_show_internal %}checked{% endif %}>
-                                        <span>Exibir Tipos (Interno)</span>
-                                    </label>
-                                </div>
-                                <div class="panel-help">
-                                    `Status (Externo)` mostra a distribuicao por etapas do chamado.
-                                    `Tipos (Interno)` mostra a classificacao interna usada no sistema.
-                                </div>
-                            </div>
-                            <div class="checkbox-panel">
-                                <span class="checkbox-panel-title">Status usados no grafico externo</span>
-                                <div class="subjects-box">
-                                    {% for status in available_chart_statuses %}
-                                    <label class="subject-item">
-                                        <input name="chart_status_codes" type="checkbox" value="{{ status.code }}" {% if status.code in user.chart_status_codes %}checked{% endif %}>
-                                        <span>{{ status.code }} - {{ status.label }}</span>
-                                    </label>
-                                    {% endfor %}
-                                </div>
-                                <div class="panel-help">
-                                    Esses status definem quais etapas aparecem na legenda e compoem o grafico externo desse usuario.
-                                </div>
-                            </div>
-                            <div class="checkbox-panel">
-                                <span class="checkbox-panel-title">Status exibidos no kanban</span>
-                                <div class="subjects-box">
-                                    {% for status in available_kanban_statuses %}
-                                    <label class="subject-item">
-                                        <input name="kanban_status_codes" type="checkbox" value="{{ status.code }}" {% if status.code in user.kanban_status_codes %}checked{% endif %}>
-                                        <span>{{ status.code }} - {{ status.label }}</span>
-                                    </label>
-                                    {% endfor %}
-                                </div>
-                                <div class="panel-help">
-                                    Esses status controlam as colunas exibidas no kanban e nao reutilizam a configuracao do grafico.
-                                </div>
-                            </div>
-                            <div id="subjects-box-{{ user.id }}" {% if user.profile == 'admin' %}style="display:none;"{% endif %}>
-                                <label style="display:block; margin-bottom: 8px; font-size: 0.85rem; font-weight: 700; color: #374151;">Assuntos permitidos</label>
-                                <div class="subjects-box">
-                                    {% set selected_codes = user.subjects | map(attribute='cod_assunto') | list %}
-                                    {% for subject in available_subjects %}
-                                    <label class="subject-item">
-                                        <input type="checkbox" name="subject_codes" value="{{ subject.cod_assunto }}" {% if subject.cod_assunto in selected_codes %}checked{% endif %}>
-                                        <span>{{ subject.cod_assunto }} - {{ subject.descr_assunto }}</span>
-                                    </label>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                            <div class="actions">
-                                <button type="submit" class="btn-primary">Salvar</button>
-                            </div>
-                            <div class="hint">
-                                Ultimo login:
+                        <div class="user-login">
+                            <i class="fas fa-at"></i>
+                            <span>{{ user.username }}</span>
+                        </div>
+                        <div class="chip-row">
+                            {% if user.chart_show_external %}
+                            <span class="chip metric"><i class="fas fa-chart-pie"></i> Dashboard externo</span>
+                            {% endif %}
+                            {% if user.chart_show_internal %}
+                            <span class="chip metric"><i class="fas fa-chart-column"></i> Dashboard interno</span>
+                            {% endif %}
+                            <span class="chip metric"><i class="fas fa-table-columns"></i> {{ user.kanban_status_codes | length }} status no kanban</span>
+                            <span class="chip metric"><i class="fas fa-tags"></i> {{ user.subjects | length }} assuntos</span>
+                            {% if user.departments %}
+                            <span class="chip metric">
+                                <i class="fas fa-building"></i>
+                                {% if user.departments | length == 1 %}
+                                {{ user.departments[0].nome_departamento or ('Depto ' ~ user.departments[0].cod_depar) }}
+                                {% else %}
+                                {{ user.departments | length }} departamentos filtro
+                                {% endif %}
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="user-summary">
+                        <div class="summary-tile">
+                            <strong>
                                 {% if user.last_login_at %}
                                 {{ user.last_login_at }}
                                 {% else %}
-                                nunca acessou
+                                Nunca acessou
                                 {% endif %}
-                            </div>
-                        </form>
+                            </strong>
+                            <span>Ultimo acesso</span>
+                        </div>
+                        <div class="summary-tile">
+                            <strong>{{ user.chart_status_codes | length }}</strong>
+                            <span>Status dashboard</span>
+                        </div>
+                        <div class="summary-tile">
+                            <strong>{{ user.kanban_status_codes | length }}</strong>
+                            <span>Status kanban</span>
+                        </div>
+                        <div class="summary-tile">
+                            <strong>
+                                {% if user.departments %}
+                                {% if user.departments | length == 1 %}
+                                {{ user.departments[0].cod_depar }}
+                                {% else %}
+                                {{ user.departments | length }}
+                                {% endif %}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </strong>
+                            <span>{% if user.departments | length == 1 %}Departamento filtro{% else %}Deptos. filtro{% endif %}</span>
+                        </div>
                     </div>
-                    {% else %}
-                    <div class="hint">Nenhum usuario cadastrado.</div>
-                    {% endfor %}
-                </div>
+
+                    <div class="user-actions">
+                        <button type="button" class="btn-secondary" onclick="openModal('modal-user-{{ user.id }}')">
+                            <i class="fas fa-pen"></i> Editar
+                        </button>
+                    </div>
+                </article>
+                {% else %}
+                <div class="empty-state">Nenhum usuario cadastrado.</div>
+                {% endfor %}
             </div>
-        </div>
+            <div class="empty-state" id="users-empty-state" style="display: none;">
+                Nenhum usuario encontrado com os filtros informados.
+            </div>
+        </section>
     </div>
 
+    {{ render_form_modal('modal-create-user', 'Novo usuario', 'Cadastre um novo acesso separando dados, dashboard, kanban e assuntos em etapas mais claras.', 'create_user') }}
+
+    {% for user in managed_users %}
+    {{ render_form_modal('modal-user-' ~ user.id, 'Editar usuario', 'Revise as permissoes e a exibicao do sistema sem expandir dezenas de opcoes diretamente na lista.', 'update_user', user) }}
+    {% endfor %}
+
     <script>
-        function toggleSubjectBox(selectEl, boxId) {
-            const box = document.getElementById(boxId);
-            if (!box) return;
-            box.style.display = selectEl.value === 'admin' ? 'none' : '';
+        let currentUserFilter = 'all';
+
+        function getVisibleWizardSteps(modal) {
+            if (!modal) return [];
+            return Array.from(modal.querySelectorAll('[data-tab-button]')).filter((button) => button.style.display !== 'none');
         }
+
+        function getCurrentStepIndex(modal) {
+            const steps = getVisibleWizardSteps(modal);
+            return steps.findIndex((button) => button.classList.contains('active'));
+        }
+
+        function getActiveTabName(modal) {
+            const activePanel = modal ? modal.querySelector('[data-tab-panel].active') : null;
+            return activePanel ? activePanel.dataset.tabPanel : '';
+        }
+
+        function animateActivePanel(modal, tabName) {
+            if (!modal) return;
+            const panel = modal.querySelector(`[data-tab-panel="${tabName}"]`);
+            if (!panel) return;
+            panel.classList.remove('is-animating');
+            void panel.offsetWidth;
+            panel.classList.add('is-animating');
+            window.setTimeout(() => {
+                panel.classList.remove('is-animating');
+            }, 240);
+        }
+
+        function updateWizardControls(modalId) {
+            const modal = document.getElementById(modalId);
+            if (!modal) return;
+            const steps = getVisibleWizardSteps(modal);
+            const activeTabName = getActiveTabName(modal);
+            const currentIndex = steps.findIndex((button) => button.dataset.tabTarget === activeTabName);
+            const prevButton = modal.querySelector('[data-wizard-prev]');
+            const nextButton = modal.querySelector('[data-wizard-next]');
+            const submitButton = modal.querySelector('[data-wizard-submit]');
+
+            if (prevButton) prevButton.style.display = currentIndex <= 0 ? 'none' : 'inline-flex';
+            if (nextButton) nextButton.style.display = currentIndex >= steps.length - 1 ? 'none' : 'inline-flex';
+            if (submitButton) submitButton.style.display = currentIndex >= steps.length - 1 ? 'inline-flex' : 'none';
+        }
+
+        function updateWizardStepStates(modalId, activeTabName) {
+            const modal = document.getElementById(modalId);
+            if (!modal) return;
+            const steps = getVisibleWizardSteps(modal);
+            const activeIndex = steps.findIndex((button) => button.dataset.tabTarget === activeTabName);
+            steps.forEach((button, index) => {
+                button.classList.toggle('active', button.dataset.tabTarget === activeTabName);
+                button.classList.toggle('completed', activeIndex > index);
+            });
+            updateWizardControls(modalId);
+        }
+
+        function updateModalSummary(modalId) {
+            const modal = document.getElementById(modalId);
+            if (!modal) return;
+
+            const profile = modal.querySelector('select[name="profile"]')?.value || 'subject';
+            const chartExternal = !!modal.querySelector('input[name="chart_show_external"]')?.checked;
+            const chartInternal = !!modal.querySelector('input[name="chart_show_internal"]')?.checked;
+            const kanbanCount = modal.querySelectorAll('input[name="kanban_status_codes"]:checked').length;
+            const subjectCount = modal.querySelectorAll('input[name="subject_codes"]:checked').length;
+            const departmentCount = modal.querySelectorAll('input[name="department_codes"]:checked').length;
+
+            const profileNode = modal.querySelector('[data-summary-profile]');
+            const dashboardNode = modal.querySelector('[data-summary-dashboard]');
+            const kanbanNode = modal.querySelector('[data-summary-kanban]');
+            const subjectsNode = modal.querySelector('[data-summary-subjects]');
+
+            if (profileNode) {
+                profileNode.textContent = profile === 'admin' ? 'Administrador' : 'Usuario por assunto';
+            }
+
+            if (dashboardNode) {
+                if (chartExternal && chartInternal) dashboardNode.textContent = 'Externo e interno';
+                else if (chartExternal) dashboardNode.textContent = 'Somente externo';
+                else if (chartInternal) dashboardNode.textContent = 'Somente interno';
+                else dashboardNode.textContent = 'Sem exibicao';
+            }
+
+            if (kanbanNode) {
+                kanbanNode.textContent = `${kanbanCount} status selecionados`;
+            }
+
+            if (subjectsNode) {
+                if (profile === 'admin') {
+                    subjectsNode.textContent = departmentCount ? `Acesso total • ${departmentCount} depto filtro` : 'Acesso total';
+                } else {
+                    subjectsNode.textContent = departmentCount
+                        ? `${subjectCount} assuntos • ${departmentCount} depto filtro`
+                        : `${subjectCount} assuntos`;
+                }
+            }
+        }
+
+        function openModal(modalId) {
+            const modal = document.getElementById(modalId);
+            if (!modal) return;
+            modal.classList.add('open');
+            document.body.classList.add('modal-open');
+            syncProfileSections(modalId);
+            updateModalSummary(modalId);
+            activateTab(modalId, 'dados');
+        }
+
+        function closeModal(modalId) {
+            const modal = document.getElementById(modalId);
+            if (!modal) return;
+            modal.classList.remove('open');
+            if (!document.querySelector('.modal.open')) {
+                document.body.classList.remove('modal-open');
+            }
+        }
+
+        function handleModalBackdrop(event, modalId) {
+            if (event.target.id === modalId) {
+                closeModal(modalId);
+            }
+        }
+
+        function activateTab(modalId, tabName) {
+            const modal = document.getElementById(modalId);
+            if (!modal) return;
+            modal.querySelectorAll('[data-tab-button]').forEach((button) => {
+                button.classList.toggle('active', button.dataset.tabTarget === tabName);
+            });
+            modal.querySelectorAll('[data-tab-panel]').forEach((panel) => {
+                panel.classList.toggle('active', panel.dataset.tabPanel === tabName);
+            });
+            updateWizardStepStates(modalId, tabName);
+            animateActivePanel(modal, tabName);
+        }
+
+        function goWizardStep(modalId, direction) {
+            const modal = document.getElementById(modalId);
+            if (!modal) return;
+            const steps = getVisibleWizardSteps(modal);
+            const activeTabName = getActiveTabName(modal);
+            const currentIndex = steps.findIndex((button) => button.dataset.tabTarget === activeTabName);
+            if (currentIndex === -1) {
+                if (steps[0]) activateTab(modalId, steps[0].dataset.tabTarget);
+                return;
+            }
+            const targetIndex = currentIndex + direction;
+            if (targetIndex < 0 || targetIndex >= steps.length) return;
+            activateTab(modalId, steps[targetIndex].dataset.tabTarget);
+        }
+
+        function syncProfileSections(modalId) {
+            const modal = document.getElementById(modalId);
+            if (!modal) return;
+            const profileSelect = modal.querySelector('select[name="profile"]');
+            const profileValue = profileSelect ? profileSelect.value : 'subject';
+            const shouldShowSubjects = profileValue !== 'admin';
+            modal.querySelectorAll('[data-profile-tab]').forEach((button) => {
+                button.style.display = shouldShowSubjects ? '' : 'none';
+            });
+            modal.querySelectorAll('[data-profile-panel]').forEach((panel) => {
+                panel.style.display = shouldShowSubjects ? '' : 'none';
+            });
+            const activeButton = modal.querySelector('[data-tab-button].active');
+            if (!shouldShowSubjects && activeButton && activeButton.dataset.tabTarget === 'assuntos') {
+                activateTab(modalId, 'dados');
+            }
+            updateModalSummary(modalId);
+            const visibleSteps = getVisibleWizardSteps(modal);
+            const activeStep = modal.querySelector('[data-tab-button].active');
+            if (!activeStep && visibleSteps[0]) {
+                activateTab(modalId, visibleSteps[0].dataset.tabTarget);
+            } else if (activeStep && activeStep.style.display === 'none' && visibleSteps[0]) {
+                activateTab(modalId, visibleSteps[0].dataset.tabTarget);
+            } else if (activeStep) {
+                updateWizardStepStates(modalId, activeStep.dataset.tabTarget);
+            }
+        }
+
+        function setUserFilter(filter) {
+            currentUserFilter = filter;
+            document.querySelectorAll('[data-filter-chip]').forEach((chip) => {
+                chip.classList.toggle('active', chip.dataset.filterChip === filter);
+            });
+            applyUserFilters();
+        }
+
+        function clearUserFilters() {
+            const input = document.getElementById('user-search');
+            if (input) input.value = '';
+            setUserFilter('all');
+        }
+
+        function applyUserFilters() {
+            const input = document.getElementById('user-search');
+            const search = (input ? input.value : '').trim().toLowerCase();
+            const cards = Array.from(document.querySelectorAll('[data-user-card]'));
+            let visibleCount = 0;
+
+            cards.forEach((card) => {
+                const matchesSearch = !search || (card.dataset.searchText || '').includes(search);
+                const profile = card.dataset.profile || '';
+                const isActive = card.dataset.active === 'true';
+                let matchesFilter = true;
+
+                if (currentUserFilter === 'admin') matchesFilter = profile === 'admin';
+                if (currentUserFilter === 'subject') matchesFilter = profile !== 'admin';
+                if (currentUserFilter === 'active') matchesFilter = isActive;
+                if (currentUserFilter === 'inactive') matchesFilter = !isActive;
+
+                const visible = matchesSearch && matchesFilter;
+                card.style.display = visible ? '' : 'none';
+                if (visible) visibleCount += 1;
+            });
+
+            const counter = document.getElementById('visible-users-count');
+            if (counter) counter.textContent = visibleCount;
+            const emptyState = document.getElementById('users-empty-state');
+            if (emptyState) emptyState.style.display = visibleCount === 0 ? '' : 'none';
+        }
+
+        function filterSelectorList(inputEl, listId) {
+            const list = document.getElementById(listId);
+            if (!list) return;
+            const query = (inputEl.value || '').trim().toLowerCase();
+            list.querySelectorAll('[data-filter-text]').forEach((item) => {
+                const text = item.dataset.filterText || '';
+                item.style.display = !query || text.includes(query) ? '' : 'none';
+            });
+        }
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                document.querySelectorAll('.modal.open').forEach((modal) => modal.classList.remove('open'));
+                document.body.classList.remove('modal-open');
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.modal').forEach((modal) => {
+                syncProfileSections(modal.id);
+                updateModalSummary(modal.id);
+                activateTab(modal.id, 'dados');
+            });
+            applyUserFilters();
+        });
     </script>
 </body>
 </html>

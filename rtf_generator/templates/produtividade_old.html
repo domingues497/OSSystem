@@ -50,13 +50,6 @@
             </div>
         </div>
 
-        <div id="period-summary"></div>
-        <div id="content-toggle" style="display:none; margin: 0 0 12px 0; justify-content: flex-end;">
-            <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; color:#1f2937; background:#fff; border:1px solid #dbe5f4; border-radius:10px; padding:8px 12px; cursor:pointer;">
-                <input type="checkbox" id="toggle-only-summary">
-                Mostrar só consolidado
-            </label>
-        </div>
         <div id="content" class="prod-content"></div>
     </div>
 
@@ -135,94 +128,6 @@
                 if (chart.isDatasetVisible(p.datasetIndex)) return p.metric;
             }
             return 'total';
-        }
-
-
-        function updateDailyBlocksVisibility() {
-            const toggle = document.getElementById('toggle-only-summary');
-            const content = document.getElementById('content');
-            const periodSummary = document.getElementById('period-summary');
-            const contentToggle = document.getElementById('content-toggle');
-            if (!content || !contentToggle || !periodSummary) return;
-
-            const hasDailyBlocks = !!content.innerHTML.trim();
-            const hasSummary = !!periodSummary.innerHTML.trim();
-            contentToggle.style.display = hasDailyBlocks && hasSummary ? 'flex' : 'none';
-
-            if (toggle && toggle.checked) {
-                content.style.display = 'none';
-            } else {
-                content.style.display = '';
-            }
-        }
-
-        function renderPeriodSummary(items, start, end) {
-            const summary = document.getElementById('period-summary');
-            if (!summary) return;
-
-            const rows = Array.isArray(items)
-                ? items
-                    .filter(item => Number(item.total || 0) > 0 || Number(item.enviados || 0) > 0 || Number(item.andamento || 0) > 0 || Number(item.finalizados || 0) > 0)
-                    .sort((a, b) => {
-                        const totalDiff = (Number(b.total || 0) || 0) - (Number(a.total || 0) || 0);
-                        if (totalDiff !== 0) return totalDiff;
-                        const finalizadosDiff = (Number(b.finalizados || 0) || 0) - (Number(a.finalizados || 0) || 0);
-                        if (finalizadosDiff !== 0) return finalizadosDiff;
-                        const andamentoDiff = (Number(b.andamento || 0) || 0) - (Number(a.andamento || 0) || 0);
-                        if (andamentoDiff !== 0) return andamentoDiff;
-                        return String(a.tecnico || '').localeCompare(String(b.tecnico || ''));
-                    })
-                : [];
-            if (!rows.length) {
-                summary.innerHTML = '';
-                return;
-            }
-
-            const totalEnviados = rows.reduce((acc, item) => acc + (Number(item.enviados || 0) || 0), 0);
-            const totalAndamento = rows.reduce((acc, item) => acc + (Number(item.andamento || 0) || 0), 0);
-            const totalFinalizados = rows.reduce((acc, item) => acc + (Number(item.finalizados || 0) || 0), 0);
-            const totalGeral = rows.reduce((acc, item) => acc + (Number(item.total || 0) || 0), 0);
-            const periodo = start && end ? `${start} até ${end}` : 'Período selecionado';
-
-            const bodyRows = rows.map(item => `
-                <tr>
-                    <td>${item.tecnico}</td>
-                    <td class="td-num td-muted">${item.enviados}</td>
-                    <td class="td-num">${item.andamento}</td>
-                    <td class="td-num">${item.finalizados}</td>
-                    <td class="td-num td-total"><strong>${item.total}</strong></td>
-                </tr>
-            `).join('');
-
-            summary.innerHTML = `
-                <div class="day-section">
-                    <div class="day-header">
-                        <span>Total consolidado do período</span>
-                        <span>${periodo}</span>
-                    </div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Técnico</th>
-                                <th class="th-num th-enviados th-muted">Envios</th>
-                                <th class="th-num th-andamento">Em Andamento</th>
-                                <th class="th-num th-finalizados">Finalizados</th>
-                                <th class="th-num th-total">Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>${bodyRows}</tbody>
-                        <tfoot>
-                            <tr>
-                                <th>Total do período</th>
-                                <th class="th-num th-muted">${totalEnviados}</th>
-                                <th class="th-num">${totalAndamento}</th>
-                                <th class="th-num">${totalFinalizados}</th>
-                                <th class="th-num th-total">${totalGeral}</th>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-            `;
         }
 
         function refreshChartFromAgg() {
@@ -371,8 +276,6 @@
                 if (!Array.isArray(data)) {
                     const msg = (data && data.error) ? data.error : 'Resposta inválida da API.';
                     content.innerHTML = `<div class="no-data" style="color: red;">Erro ao carregar dados: ${msg}</div>`;
-                    renderPeriodSummary([], start, end);
-                    updateDailyBlocksVisibility();
                     updateFinalizadosChart([], start, end);
                     return;
                 }
@@ -381,8 +284,6 @@
                     _lastAgg = [];
                     _lastStart = start;
                     _lastEnd = end;
-                    renderPeriodSummary([], start, end);
-                    updateDailyBlocksVisibility();
                     updateFinalizadosChart([], start, end);
                     return;
                 }
@@ -391,7 +292,6 @@
                 _lastStart = start;
                 _lastEnd = end;
                 refreshChartFromAgg();
-                renderPeriodSummary(_lastAgg, start, end);
 
                 content.innerHTML = data.map(day => {
                     const tecnicos = Array.isArray(day.tecnicos) ? day.tecnicos : [];
@@ -442,15 +342,12 @@
                         </div>
                     `;
                 }).join('');
-                updateDailyBlocksVisibility();
 
             } catch (e) {
                 content.innerHTML = `<div class="no-data" style="color: red;">Erro ao carregar dados: ${e.message}</div>`;
                 _lastAgg = [];
                 _lastStart = start;
                 _lastEnd = end;
-                renderPeriodSummary([], start, end);
-                updateDailyBlocksVisibility();
                 updateFinalizadosChart([], start, end);
             }
         }
@@ -488,19 +385,6 @@
             };
             if (startEl) startEl.addEventListener('change', handler);
             if (endEl) endEl.addEventListener('change', handler);
-        }
-
-        const onlySummaryToggle = document.getElementById('toggle-only-summary');
-        if (onlySummaryToggle) {
-            const savedOnlySummary = localStorage.getItem('produtividade-only-summary');
-            onlySummaryToggle.checked = savedOnlySummary === null ? true : savedOnlySummary === '1';
-            if (savedOnlySummary === null) {
-                localStorage.setItem('produtividade-only-summary', '1');
-            }
-            onlySummaryToggle.addEventListener('change', () => {
-                localStorage.setItem('produtividade-only-summary', onlySummaryToggle.checked ? '1' : '0');
-                updateDailyBlocksVisibility();
-            });
         }
 
         carregarProdutividade();

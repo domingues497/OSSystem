@@ -4,6 +4,7 @@ import os
 import re
 from config import Config
 from repositories.local_auth_repository import LocalAuthRepository
+from utils.chamados_filters import get_chamados_filter_definitions
 from utils.dashboard_statuses import normalize_dashboard_status_codes
 from utils.auth_utils import (
     admin_required,
@@ -48,6 +49,26 @@ def _parse_subjects_from_form(auth_repo, form):
     }
     return [
         {"cod_assunto": code, "descr_assunto": subject_map.get(code, "")}
+        for code in selected_codes
+    ]
+
+
+def _parse_departments_from_form(auth_repo, form):
+    selected_codes = []
+    for raw in form.getlist("department_codes"):
+        try:
+            code = int(str(raw).strip())
+        except Exception:
+            continue
+        if code not in selected_codes:
+            selected_codes.append(code)
+
+    department_map = {
+        int(item["cod_depar"]): item.get("nome_departamento") or ""
+        for item in auth_repo.list_available_departments()
+    }
+    return [
+        {"cod_depar": code, "nome_departamento": department_map.get(code, "")}
         for code in selected_codes
     ]
 
@@ -162,6 +183,7 @@ def manage_users():
                 confirm_password = request.form.get("confirm_password") or ""
                 profile = (request.form.get("profile") or "subject").strip().lower()
                 subjects = _parse_subjects_from_form(auth_repo, request.form)
+                departments = _parse_departments_from_form(auth_repo, request.form)
                 chart_flags = _parse_chart_flags_from_form(request.form)
                 chart_status_codes = _parse_chart_status_codes_from_form(request.form)
                 kanban_status_codes = _parse_kanban_status_codes_from_form(request.form)
@@ -182,6 +204,7 @@ def manage_users():
                     display_name=display_name,
                     profile=profile,
                     subjects=subjects,
+                    departments=departments,
                     is_active=is_active,
                     chart_flags=chart_flags,
                     chart_status_codes=chart_status_codes,
@@ -196,6 +219,7 @@ def manage_users():
                 password = request.form.get("password") or ""
                 is_active = (request.form.get("is_active") or "").strip().lower() in {"1", "true", "on", "yes"}
                 subjects = _parse_subjects_from_form(auth_repo, request.form)
+                departments = _parse_departments_from_form(auth_repo, request.form)
                 chart_flags = _parse_chart_flags_from_form(request.form)
                 chart_status_codes = _parse_chart_status_codes_from_form(request.form)
                 kanban_status_codes = _parse_kanban_status_codes_from_form(request.form)
@@ -214,6 +238,7 @@ def manage_users():
                     is_active=is_active,
                     password=password or None,
                     subjects=subjects,
+                    departments=departments,
                     chart_flags=chart_flags,
                     chart_status_codes=chart_status_codes,
                     kanban_status_codes=kanban_status_codes,
@@ -229,6 +254,7 @@ def manage_users():
         error=error,
         success=success,
         available_subjects=auth_repo.list_available_subjects(),
+        available_departments=auth_repo.list_available_departments(),
         available_chart_statuses=auth_repo.list_available_chart_statuses(),
         available_kanban_statuses=auth_repo.list_available_kanban_statuses(),
         managed_users=auth_repo.list_users_with_subjects(),
@@ -281,7 +307,10 @@ def produtividade_page():
 @web_bp.route('/chamados')
 @login_required
 def chamados_page():
-    return _render_with_auth('chamados.html')
+    return _render_with_auth(
+        'chamados.html',
+        available_chamados_filters=get_chamados_filter_definitions(),
+    )
 
 @web_bp.route('/favicon.ico')
 def favicon():

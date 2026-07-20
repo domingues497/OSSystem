@@ -8,7 +8,7 @@ from utils.dashboard_statuses import (
     normalize_dashboard_status_codes,
 )
 from datetime import datetime, timedelta
-from utils.datetime_utils import erp_to_datetime, format_duration_short
+from utils.datetime_utils import erp_to_datetime, format_duration_short, format_erp_date
 from time import perf_counter
 import os
 
@@ -265,6 +265,8 @@ class DashboardService:
             mm = int((h_val - hh) * 100)
             ss = int(((h_val - hh) * 100 - mm) * 100)
             d['hora_cad_fmt'] = f"{hh:02d}:{mm:02d}:{ss:02d}"
+            d['data_cad_fmt'] = format_erp_date(d.get('data_cad'))
+            d['data_cad_display'] = f"{d['data_cad_fmt']} {hh:02d}:{mm:02d}".strip()
 
             dt_str = str(d.get('data_cad') or '')
             if len(dt_str) == 8:
