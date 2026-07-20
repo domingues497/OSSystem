@@ -645,7 +645,7 @@
             if (!container) return;
             const selected = Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map((input) => input.value);
             try {
-                c('/api/erp/chamados_filter_preferences', {
+                const response = await fetch('/api/erp/chamados_filter_preferences', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ filter_ids: selected }),
