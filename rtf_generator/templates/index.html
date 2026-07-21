@@ -430,6 +430,22 @@
 
                         const labels = []; const values = []; const colors = [];
                         const externalStats = data.detalhes || [];
+
+                                                    const ordemStatus = {
+                                "Aberta": 1,
+                                "Em andamento": 2,
+                                "Aguardando autorizacao": 3,
+                                "Aguardando avaliação": 4,
+                                "Programada": 5,
+                                "Retrabalho": 6,
+                                "Encerrada": 7,
+                                "Rejeitada": 8
+                            };
+                            
+                            externalStats.sort((a, b) => {
+                                return (ordemStatus[a.descricao] ?? 999) - (ordemStatus[b.descricao] ?? 999);
+                            });
+
                         externalStats.forEach(stat => {
                             const color = statusColors[stat.codigo] || '#eee';
                             if (!stat.ignorar_percentual) {
@@ -462,7 +478,7 @@
                         const doubleCtx = document.getElementById('doubleDoughnutChart');
                         if (doubleCtx) {
                             if (doubleDoughnutChart) doubleDoughnutChart.destroy();
-                            
+
                             const statusLabels = []; const statusValues = []; const statusColorsList = [];
                             externalStats.forEach(s => {
                                 statusLabels.push(s.descricao); statusValues.push(s.quantidade); statusColorsList.push(statusColors[s.codigo]);
