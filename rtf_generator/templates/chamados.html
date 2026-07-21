@@ -1649,6 +1649,7 @@
             renderFilterPreferences();
             setupEnterToFilter();
             setupLiveFilters();
+            setInterval(() => {location.reload();}, 3600000);
             if (ACCESS_SCOPE && ACCESS_SCOPE.can_manage_filters) {
                 setupHiddenAdvancedFilterShortcut();
             }
