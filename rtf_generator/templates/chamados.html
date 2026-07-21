@@ -1122,7 +1122,6 @@
                 if (t.no_iteration) cardClass += ' no-iteration';
                 if (t.waiting_auth) cardClass += ' waiting-auth';
                 else if (t.auth_approved) cardClass += ' auth-approved';
-                
                 let typeColor = '#1565c0';
                 let typeBg = '#e3f2fd';
                 let typeBorder = '#bbdefb';
@@ -1152,7 +1151,7 @@
                     <div class="${cardClass}" data-ticket-id="${t.id}" onclick="openDetails('${t.id}', '${id}')">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
                             <span style="font-weight: bold; color: #333;">
-                                #${t.id}${dataAbertura ? ` <span style="font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; background: #f1f3f4; color: #5f6368; border: 1px solid #dadce0; font-weight: bold;">${dataAbertura}</span>` : ''} ${atendenteChip} ${t.has_note ? '📝' : ''}
+                                #${t.id}${dataAbertura ? ` <span style="font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; background: #f1f3f4; color: #5f6368; border: 1px solid #dadce0; font-weight: bold;">${dataAbertura}</span>` : ''} ${t.cod_gestor != null && t.cod_gestor !== '' ? ` G · ${t.cod_gestor}` : ''} ${t.has_note ? '📝' : ''}
                             </span>
                             <div style="display:flex; align-items:center; gap:6px;">
                                 ${showAuth ? `<span title="Aprovação gerência (aprovado/solicitado)" style="font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; background: ${authBg}; color: ${authColor}; border: 1px solid ${authBorder}; font-weight: bold;">

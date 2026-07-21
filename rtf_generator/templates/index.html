@@ -641,13 +641,13 @@
                 return `
                     <div class="pending-card ${sla?.isOverdue ? 'overdue' : ''}" onclick="openDetails('${t.cod_solicitacao}')" style="cursor:pointer;">
                         <div style="display:flex; justify-content:space-between; align-items:start;">
-                            <strong style="font-size: 1.25rem;">#${t.cod_solicitacao} ${t.has_local_note ? '📝' : ''}</strong>
+                            <strong style="font-size: 1.25rem;">#${t.cod_solicitacao} ${t.has_local_note ? '📝' : ''} </strong>
                             <span class="status-badge" style="font-size:0.65rem;">${badge || t.cod_status_doc || '...'}</span>
                         </div>
                         <div style="font-size: 0.85rem; margin-top:5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${t.titulo_solicitacao}</div>
                         ${withSLA ? `<span class="sla-timer" data-id="${t.cod_solicitacao}">${sla.timerText}</span>` : ''}
                         <div class="pending-meta" style="display:flex; flex-direction:column; gap:2px;">
-                            <div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">👤 ${t.solicitante || ''}</div>
+                            <div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">👤 ${t.solicitante || ''} ${t.cod_gestor ? `  • G${t.cod_gestor}` : ''}</div>
                             <div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${metaParts.join(' • ')}</div>
                         </div>
                     </div>`;
@@ -666,14 +666,14 @@
             const sign = overdue ? '-' : '';
 
             if (days > 0) {
-                return `${sign}${days}d ${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                return `${sign}${days}d ${hours}:${String(minutes).padStart(2, '0')}`;
             }
 
             if (hours > 0) {
-                return `${sign}${hours}h ${minutes}m ${seconds}s`;
+                return `${sign}${hours}h ${minutes}m`;
             }
 
-            return `${sign}${minutes}m ${seconds}s`;
+            return `${sign}${minutes}m`;
         }
 
         async function openDetails(id) {
@@ -804,7 +804,7 @@
                 return cursor;
             };
 
-            const deadline = addBusinessMinutes(openDate, 30);
+            const deadline = addBusinessMinutes(openDate, 40);
 
             let diff = (deadline ? deadline.getTime() : now.getTime()) - now.getTime();
             let overdue = diff < 0;

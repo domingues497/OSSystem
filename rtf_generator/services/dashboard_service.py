@@ -331,6 +331,7 @@ class DashboardService:
 
         kanban = {group["id"]: [] for group in kanban_groups}
         for r in base_rows:
+            print(">>>>", r)
             tid = int(r["id"])
             item_tipo = classify_ticket(r["titulo"])
             atendente = assignees_by_ticket.get(tid, "")
@@ -360,6 +361,7 @@ class DashboardService:
                 "auth_approved": bool(r["auth_approved"]),
                 "auth_req_count": int(r.get("auth_req_count") or 0),
                 "auth_appr_count": int(r.get("auth_appr_count") or 0),
+                "cod_gestor": r.get("cod_gestor"),
                 "has_note": tid in ids_with_notes,
                 "atendente": atendente
             }

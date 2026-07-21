@@ -823,10 +823,12 @@ class ERPRepository:
                 DM1744.HORA_CAD,
                 DS0300.NOME_USUARIO as SOLICITANTE,
                 DC1739.DESCR_ASSUNTO AS ASSUNTO,
-                DEPT.DEPARTAMENTO
+                DEPT.DEPARTAMENTO,
+                U.COD_GESTOR
             FROM BANCO01.DM1744 
             LEFT JOIN public.DS0300 ON (DS0300.COD_USUARIO = DM1744.COD_USUARIO)
             LEFT JOIN BANCO01.DC1739 ON (DC1739.COD_ASSUNTO = DM1744.COD_ASSUNTO)
+            LEFT JOIN capalti.chamados_usuarios U ON (U.cod_usuario = DM1744.COD_USUARIO)
             LEFT JOIN LATERAL (
                 SELECT STRING_AGG(DISTINCT CAST(X.COD_DEPAR AS TEXT), ', ' ORDER BY CAST(X.COD_DEPAR AS TEXT)) AS DEPARTAMENTO
                 FROM BANCO01.DC1966 X
@@ -1138,7 +1140,8 @@ class ERPRepository:
                 (COALESCE(AUTH.appr_count, 0) > 0) AS AUTH_APPROVED,
                 COALESCE(AUTH.req_count, 0) AS AUTH_REQ_COUNT,
                 COALESCE(AUTH.appr_count, 0) AS AUTH_APPR_COUNT,
-                U.teams_user AS TEAMS_USER
+                U.teams_user AS TEAMS_USER,
+                U.cod_gestor AS COD_GESTOR
             FROM BANCO01.DM1744
             LEFT JOIN public.DS0300 ON (DS0300.COD_USUARIO = DM1744.COD_USUARIO)
             LEFT JOIN BANCO01.DC1739 ON (DC1739.COD_ASSUNTO = DM1744.COD_ASSUNTO)
@@ -1421,7 +1424,9 @@ class ERPRepository:
                     WAITING_AUTH,
                     AUTH_APPROVED,
                     AUTH_REQ_COUNT,
-                    AUTH_APPR_COUNT
+                    AUTH_APPR_COUNT,
+                    TEAMS_USER,
+                    COD_GESTOR
                 FROM ranked_kanban
                 WHERE COD_STATUS_DOC <> 'BA' OR ENCERRADOS_RN <= %s
                 ORDER BY DATA_CAD DESC, COD_SOLICITACAO DESC
@@ -1432,6 +1437,9 @@ class ERPRepository:
 
         cur.execute(query, params)
         rows = cur.fetchall()
+        #print("COLUNAS:", len(rows[0]))
+        #print(rows[0])
+        #print(query)
         cur.close()
         conn.close()
 
@@ -1449,6 +1457,9 @@ class ERPRepository:
                 "auth_approved": bool(r[9]),
                 "auth_req_count": int(r[10] or 0),
                 "auth_appr_count": int(r[11] or 0),
+                "teams_user": r[12],
+                "cod_gestor": r[13],
+
             }
             for r in rows
         ]
