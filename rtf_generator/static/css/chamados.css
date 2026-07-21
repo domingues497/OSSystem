@@ -249,19 +249,56 @@ tr:hover td { background-color: #f8faff; }
     .filter-actions .btn { font-size: 0; padding: 9px 10px; }
     .filter-actions .btn i { font-size: 0.9rem; }
 }
-.teams-chat-btn{
-    background:#6264A7;
-    border-color:#6264A7;
-    color:#fff;
+.teams-icon-btn{
+    width:38px;
+    height:38px;
+
+    border:none;
+    background:transparent;
+
+    border-radius:50%;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    cursor:pointer;
+
     transition:.2s;
 }
 
-.teams-chat-btn:hover{
-    background:#50528c;
-    border-color:#50528c;
-    color:#fff;
+.teams-icon-btn img{
+    width:28px;
+    height:28px;
 }
 
-.teams-chat-btn i{
-    font-size:14px;
+.teams-icon-btn:hover{
+    background:#ecebff;
+    transform:scale(1.08);
+}
+
+.solicitante-linha {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.teams-icon-btn {
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.teams-icon-btn img {
+    width: 18px;
+    height: 18px;
+}
+
+.teams-icon-btn:hover img {
+    transform: scale(1.1);
 }

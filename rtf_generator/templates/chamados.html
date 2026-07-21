@@ -1356,24 +1356,29 @@
                             ${data.criador ? `<p><strong>Criador por:</strong> ${data.criador}</p>` : ``}
                             <p><strong>Chamado:</strong> #${id}</p>
                             <p>
-                            <p class="mb-2">
+                            <div class="solicitante-linha mb-2">
                                 <strong>Solicitante:</strong>
-                                    <span>${(data.cod_usuario ? `${data.cod_usuario} - ` : '')}${escapeHtml(data.solicitante)}</span>
-                                    ${
-                                        data.teams_user
-                                        ? `
-                                            <button
-                                                type="button"
-                                                class="btn btn-sm btn-primary teams-chat-btn"
-                                                data-teams-user="${escapeHtml(data.teams_user)}"
-                                                onclick="abrirTeams(this.dataset.teamsUser)">
-                                                <i class="fab fa-microsoft"></i>
-                                                Teams
-                                            </button>
-                                        `
-                                        : ''
-                                    }
-                            <br>
+                            
+                                <span>
+                                    ${(data.cod_usuario ? `${data.cod_usuario} - ` : '')}${escapeHtml(data.solicitante)}
+                                </span>
+                            
+                                ${
+                                    data.teams_user
+                                    ? `
+                                    <button
+                                        type="button"
+                                        class="teams-icon-btn"
+                                        data-teams-user="${escapeHtml(data.teams_user)}"
+                                        onclick="abrirTeams(this.dataset.teamsUser)"
+                                        title="Abrir conversa no Microsoft Teams">
+                            
+                                        <img src="/static/img/teams.png" alt="Teams">
+                                    </button>
+                                    `
+                                    : ''
+                                }
+                            </div>
 
                             <p><strong>Assunto:</strong> ${data.assunto ? escapeHtml(data.assunto) : 'N/A'}</p>
                             <p><strong>Departamento:</strong> ${data.departamento ? escapeHtml(data.departamento) : 'N/A'}</p>
