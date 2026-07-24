@@ -331,7 +331,6 @@ class DashboardService:
 
         kanban = {group["id"]: [] for group in kanban_groups}
         for r in base_rows:
-            print(">>>>", r)
             tid = int(r["id"])
             item_tipo = classify_ticket(r["titulo"])
             atendente = assignees_by_ticket.get(tid, "")

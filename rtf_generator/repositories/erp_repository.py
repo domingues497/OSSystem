@@ -1437,9 +1437,6 @@ class ERPRepository:
 
         cur.execute(query, params)
         rows = cur.fetchall()
-        #print("COLUNAS:", len(rows[0]))
-        #print(rows[0])
-        #print(query)
         cur.close()
         conn.close()
 

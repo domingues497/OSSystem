@@ -306,6 +306,11 @@
     <script src="{{ url_for('static', filename='js/teams.js') }}"></script>
     <script>
         const ACCESS_SCOPE = JSON.parse(document.getElementById('access-scope-data')?.textContent || '{}');
+        const tipoLabel = {
+            'Incidente': 'INC.',
+            'Requisição': 'REQ.',
+            'BI': 'B.I.'
+        };
         const CHAMADOS_FILTER_DEFINITIONS = JSON.parse(document.getElementById('chamados-filter-definitions-data')?.textContent || '[]');
         let visibleChamadosFilterIds = Array.isArray(ACCESS_SCOPE && ACCESS_SCOPE.chamados_filter_ids)
             ? [...ACCESS_SCOPE.chamados_filter_ids]
@@ -1157,9 +1162,9 @@
                                 ${showAuth ? `<span title="Aprovação gerência (aprovado/solicitado)" style="font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; background: ${authBg}; color: ${authColor}; border: 1px solid ${authBorder}; font-weight: bold;">
                                     ${appr}/${req}
                                 </span>` : ``}
-                                <span style="font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; background: ${typeBg}; color: ${typeColor}; border: 1px solid ${typeBorder}; font-weight: bold;">
-                                    ${(t.tipo || '').toUpperCase()}
-                                </span>
+                            <span style="font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; background: ${typeBg}; color: ${typeColor}; border: 1px solid ${typeBorder}; font-weight: bold;">
+                                ${tipoLabel[t.tipo] || t.tipo}
+                            </span>
                             </div>
                         </div>
                         <div style="font-size: 0.85rem; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
