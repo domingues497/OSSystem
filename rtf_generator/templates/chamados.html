@@ -298,6 +298,13 @@
             <div id="modal-content"></div>
         </div>
     </div>
+    <div id="contact-editor-drawer" class="contact-drawer-overlay" aria-hidden="true">
+        <div class="contact-drawer-backdrop" onclick="closeTicketUserContactDrawer()"></div>
+        <aside class="contact-drawer-panel" role="dialog" aria-modal="true" aria-labelledby="contact-drawer-title">
+            <div id="contact-editor-drawer-content"></div>
+        </aside>
+    </div>
+    <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
     <script id="access-scope-data" type="application/json">{{ (access_scope if access_scope else {}) | tojson }}</script>
     <script id="chamados-filter-definitions-data" type="application/json">{{ (available_chamados_filters if available_chamados_filters else []) | tojson }}</script>
@@ -328,6 +335,11 @@
         let tecnicosFiltroCache = [];
         let currentKanbanView = {};
         let currentModalContext = { columnId: null, ticketId: null, ticketsSnapshot: [] };
+        let ticketModalContactCache = {};
+        let ticketUserLookupCache = {};
+        let activeTicketContactDrawerId = null;
+        let activeToastTimer = null;
+        let whatsappWindow = null;
         let tvModeEnabled = localStorage.getItem('tv-mode-enabled') === 'true';
         let wakeLock = null;
         let scrollMemorySetupDone = false;
@@ -1156,7 +1168,7 @@
                     <div class="${cardClass}" data-ticket-id="${t.id}" onclick="openDetails('${t.id}', '${id}')">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
                             <span style="font-weight: bold; color: #333;">
-                                #${t.id}${dataAbertura ? ` <span style="font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; background: #f1f3f4; color: #5f6368; border: 1px solid #dadce0; font-weight: bold;">${dataAbertura}</span>` : ''} ${t.cod_gestor != null && t.cod_gestor !== '' ? ` G · ${t.cod_gestor}` : ''} ${t.has_note ? '📝' : ''}
+                                ${t.id}${dataAbertura ? ` <span style="font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; background: #f1f3f4; color: #5f6368; border: 1px solid #dadce0; font-weight: bold;">${dataAbertura}</span>` : ''} ${t.cod_gestor != null && t.cod_gestor !== '' ? ` G · ${t.cod_gestor}` : ''} ${t.has_note ? '📝' : ''}
                             </span>
                             <div style="display:flex; align-items:center; gap:6px;">
                                 ${showAuth ? `<span title="Aprovação gerência (aprovado/solicitado)" style="font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; background: ${authBg}; color: ${authColor}; border: 1px solid ${authBorder}; font-weight: bold;">
@@ -1305,6 +1317,11 @@
         function handleModalKeyNavigation(event) {
             const modal = document.getElementById('details-modal');
             if (!modal || modal.style.display !== 'flex') return;
+            if (event.key === 'Escape' && activeTicketContactDrawerId) {
+                event.preventDefault();
+                closeTicketUserContactDrawer();
+                return;
+            }
             const targetTag = (event.target && event.target.tagName ? event.target.tagName : '').toUpperCase();
             if (['INPUT', 'TEXTAREA', 'SELECT'].includes(targetTag)) return;
             if (event.key === 'ArrowLeft') {
@@ -1321,11 +1338,808 @@
             if (document.visibilityState === 'visible') requestWakeLock();
         });
 
+        function getTicketUserContactState(id) {
+            return ticketModalContactCache[String(id)] || null;
+        }
+
+        function sanitizeDigits(value) {
+            return String(value || '').replace(/\D/g, '');
+        }
+
+        function sanitizeManagerCode(value) {
+            return sanitizeDigits(value).slice(0, 10);
+        }
+
+        function sanitizeWhatsAppDigits(value) {
+            return sanitizeDigits(value).slice(0, 15);
+        }
+
+        function formatWhatsAppValue(value) {
+            const digits = sanitizeWhatsAppDigits(value);
+            if (!digits) return '';
+
+            let prefix = '';
+            let localDigits = digits;
+            if (digits.startsWith('55') && digits.length > 11) {
+                prefix = '+55 ';
+                localDigits = digits.slice(2, 13);
+            }
+
+            if (localDigits.length <= 2) return `${prefix}${localDigits ? `(${localDigits}` : ''}`;
+            if (localDigits.length <= 7) return `${prefix}(${localDigits.slice(0, 2)}) ${localDigits.slice(2)}`;
+            if (localDigits.length <= 10) return `${prefix}(${localDigits.slice(0, 2)}) ${localDigits.slice(2, 6)}-${localDigits.slice(6)}`;
+            return `${prefix}(${localDigits.slice(0, 2)}) ${localDigits.slice(2, 7)}-${localDigits.slice(7, 11)}`;
+        }
+
+        function isValidEmail(value) {
+            const text = String(value || '').trim();
+            if (!text) return true;
+            return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text);
+        }
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+
+            if (activeToastTimer) {
+                clearTimeout(activeToastTimer);
+                activeToastTimer = null;
+            }
+
+            container.innerHTML = `
+                <div class="app-toast is-${type}">
+                    <span>${escapeHtml(message)}</span>
+                </div>
+            `;
+            container.classList.add('is-visible');
+
+            activeToastTimer = setTimeout(() => {
+                container.classList.remove('is-visible');
+                activeToastTimer = setTimeout(() => {
+                    container.innerHTML = '';
+                    activeToastTimer = null;
+                }, 180);
+            }, 2600);
+        }
+
+        async function copyToClipboardValue(value) {
+            const text = String(value || '').trim();
+            if (!text) return;
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    const temp = document.createElement('textarea');
+                    temp.value = text;
+                    temp.setAttribute('readonly', 'readonly');
+                    temp.style.position = 'absolute';
+                    temp.style.left = '-9999px';
+                    document.body.appendChild(temp);
+                    temp.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(temp);
+                }
+                showToast('Copiado para a área de transferência.', 'success');
+            } catch (error) {
+                console.error('Erro ao copiar conteúdo', error);
+                showToast('Não foi possível copiar o conteúdo.', 'error');
+            }
+        }
+
+        function openWhatsAppConversation(value) {
+            const digits = sanitizeWhatsAppDigits(value);
+            if (!digits) return;
+
+            const url = `https://web.whatsapp.com/send?phone=${digits}`;
+
+            if (whatsappWindow && !whatsappWindow.closed) {
+                whatsappWindow.location.replace(url);
+                whatsappWindow.focus();
+            } else {
+                whatsappWindow = window.open(url, 'whatsapp');
+            }
+        }
+
+        function buildTicketUserContactSection(id) {
+            const state = getTicketUserContactState(id);
+            if (!state) return '';
+
+            const codUsuario = state.cod_usuario ? `${escapeHtml(state.cod_usuario)} - ` : '';
+            const solicitante = escapeHtml(state.solicitante || 'N/A');
+            const teamsUser = String(state.teams_user || '').trim();
+            const teamsUserJson = JSON.stringify(teamsUser);
+            const whatsappUser = sanitizeWhatsAppDigits(state.whatsapp_user || '');
+            const whatsappUserJson = JSON.stringify(whatsappUser);
+
+            return `
+                <div class="solicitante-linha">
+                    <strong>Solicitante:</strong>
+                    ${
+                        state.cod_usuario
+                            ? `
+                            <button
+                                type="button"
+                                class="solicitante-trigger"
+                                onclick="openTicketUserContactDrawer('${id}')"
+                                title="Editar Teams, WhatsApp e gestor do solicitante">
+                                ${codUsuario}${solicitante}
+                            </button>
+                            `
+                            : `<span>${solicitante}</span>`
+                    }
+                    ${
+                        teamsUser
+                            ? `
+                            <button
+                                type="button"
+                                class="teams-icon-btn"
+                                onclick='abrirTeams(${teamsUserJson})'
+                                title="Abrir conversa no Microsoft Teams">
+                                <img src="/static/img/teams.png" alt="Teams">
+                            </button>
+                            `
+                            : ''
+                    }
+                    ${
+                        whatsappUser
+                            ? `
+                            <button
+                                type="button"
+                                class="whatsapp-icon-btn"
+                                onclick='openWhatsAppConversation(${whatsappUserJson})'
+                                title="Abrir conversa no WhatsApp">
+                                <i class="fab fa-whatsapp" aria-hidden="true"></i>
+                            </button>
+                            `
+                            : ''
+                    }
+                </div>
+            `;
+        }
+
+        function initializeTicketUserContactState(id, data) {
+            const ticketId = String(id);
+            ticketModalContactCache[ticketId] = {
+                cod_usuario: data.cod_usuario ? String(data.cod_usuario) : '',
+                cod_solicitacao: ticketId,
+                solicitante: data.solicitante || '',
+                teams_user: data.teams_user || '',
+                whatsapp_user: sanitizeWhatsAppDigits(data.whatsapp_user || ''),
+                cod_gestor: data.cod_gestor != null ? sanitizeManagerCode(data.cod_gestor) : '',
+                form: {
+                    teams_user: data.teams_user || '',
+                    whatsapp_user: sanitizeWhatsAppDigits(data.whatsapp_user || ''),
+                    cod_gestor: data.cod_gestor != null ? sanitizeManagerCode(data.cod_gestor) : '',
+                },
+                errors: {
+                    teams_user: '',
+                    whatsapp_user: '',
+                    cod_gestor: '',
+                },
+                saving: false,
+                manager_lookup: {
+                    loading: false,
+                    code: '',
+                    data: null,
+                    error: '',
+                    warning: '',
+                },
+                manager_request_seq: 0,
+                manager_debounce_timer: null,
+            };
+        }
+
+        function renderTicketUserContactSection(id) {
+            const container = document.getElementById(`ticket-user-contact-${id}`);
+            if (!container) return;
+            container.innerHTML = buildTicketUserContactSection(id);
+        }
+
+        function getManagerLookupState(state) {
+            return state?.manager_lookup || {
+                loading: false,
+                code: '',
+                data: null,
+                error: '',
+                warning: '',
+            };
+        }
+
+        function getTicketUserContactErrors(state) {
+            return state?.errors || {
+                teams_user: '',
+                whatsapp_user: '',
+                cod_gestor: '',
+            };
+        }
+
+        function validateTicketUserContactState(id) {
+            const state = getTicketUserContactState(id);
+            if (!state) return false;
+
+            const errors = {
+                teams_user: '',
+                whatsapp_user: '',
+                cod_gestor: '',
+            };
+
+            const teamsValue = String(state.form.teams_user || '').trim();
+            const gestorValue = sanitizeManagerCode(state.form.cod_gestor);
+            const managerLookup = getManagerLookupState(state);
+
+            if (teamsValue && !isValidEmail(teamsValue)) {
+                errors.teams_user = 'Informe um e-mail válido.';
+            }
+
+            if (state.form.cod_gestor && !gestorValue) {
+                errors.cod_gestor = 'Informe apenas números.';
+            } else if (gestorValue && managerLookup.error) {
+                errors.cod_gestor = managerLookup.error;
+            }
+
+            state.form.whatsapp_user = sanitizeWhatsAppDigits(state.form.whatsapp_user);
+            state.form.cod_gestor = gestorValue;
+            state.errors = errors;
+            return !Object.values(errors).some(Boolean);
+        }
+
+        function canSaveTicketUserContact(id) {
+            const state = getTicketUserContactState(id);
+            if (!state) return false;
+
+            validateTicketUserContactState(id);
+            const errors = getTicketUserContactErrors(state);
+            const managerLookup = getManagerLookupState(state);
+            const gestorValue = sanitizeManagerCode(state.form.cod_gestor);
+
+            if (state.saving || Object.values(errors).some(Boolean)) return false;
+            if (managerLookup.loading) return false;
+            if (!gestorValue) return true;
+            if (String(managerLookup.code || '') !== gestorValue) return false;
+            if (!managerLookup.data) return false;
+            return true;
+        }
+
+        function buildTicketContactActionButtons(id, fieldKey) {
+            const state = getTicketUserContactState(id);
+            if (!state) return '';
+
+            if (fieldKey === 'teams_user') {
+                const teamsValue = String(state.form.teams_user || '').trim();
+                if (!teamsValue) return '';
+                const teamsValueJson = JSON.stringify(teamsValue);
+                return `
+                    <button type="button" class="contact-action-btn" onclick='abrirTeams(${teamsValueJson})' title="Abrir Teams">
+                        <i class="fab fa-microsoft"></i>
+                        <span>Abrir Teams</span>
+                    </button>
+                    <button type="button" class="contact-action-btn contact-action-btn-icon" onclick='copyToClipboardValue(${teamsValueJson})' title="Copiar Teams">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                `;
+            }
+
+            if (fieldKey === 'whatsapp_user') {
+                const whatsappValue = sanitizeWhatsAppDigits(state.form.whatsapp_user);
+                if (!whatsappValue) return '';
+                const whatsappValueJson = JSON.stringify(whatsappValue);
+                return `
+                    <button type="button" class="contact-action-btn" onclick='openWhatsAppConversation(${whatsappValueJson})' title="Abrir conversa">
+                        <i class="fab fa-whatsapp"></i>
+                        <span>Abrir conversa</span>
+                    </button>
+                    <button type="button" class="contact-action-btn contact-action-btn-icon" onclick='copyToClipboardValue(${whatsappValueJson})' title="Copiar WhatsApp">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                `;
+            }
+
+            if (fieldKey === 'cod_gestor') {
+                const managerLookup = getManagerLookupState(state);
+                if (managerLookup.loading) {
+                    return `
+                        <span class="contact-inline-spinner" title="Buscando gestor">
+                            <span class="contact-spinner"></span>
+                        </span>
+                    `;
+                }
+            }
+
+            return '';
+        }
+
+        function buildTicketContactManagerInfo(id) {
+            const state = getTicketUserContactState(id);
+            if (!state) return '';
+
+            const managerLookup = getManagerLookupState(state);
+            if (managerLookup.loading) {
+                return `
+                    <div class="contact-manager-card is-loading">
+                        <span class="contact-spinner"></span>
+                        <span>Buscando gestor...</span>
+                    </div>
+                `;
+            }
+
+            if (managerLookup.data && String(managerLookup.code || '') === sanitizeManagerCode(state.form.cod_gestor)) {
+                const manager = managerLookup.data;
+                const isInactive = manager.ativo === false;
+                const titlePrefix = isInactive ? '⚠' : '✔';
+                const subtitle = isInactive
+                    ? 'Usuário inativo'
+                    : (manager.cargo ? escapeHtml(manager.cargo) : 'Usuário localizado');
+                return `
+                    <div class="contact-manager-card ${isInactive ? 'is-warning' : 'is-success'}">
+                        <strong>${titlePrefix} ${escapeHtml(manager.nome || 'Usuário localizado')}</strong>
+                        <span>${subtitle}</span>
+                    </div>
+                `;
+            }
+
+            return '';
+        }
+
+        function buildTicketUserContactField(id, fieldKey, config) {
+            const state = getTicketUserContactState(id);
+            if (!state) return '';
+
+            const errors = getTicketUserContactErrors(state);
+            const fieldValue = fieldKey === 'whatsapp_user'
+                ? formatWhatsAppValue(state.form.whatsapp_user)
+                : escapeHtml(state.form[fieldKey] || '');
+            const error = errors[fieldKey] || '';
+            const actions = buildTicketContactActionButtons(id, fieldKey);
+            const managerInfo = fieldKey === 'cod_gestor' ? buildTicketContactManagerInfo(id) : '';
+
+            return `
+                <div class="contact-field ${error ? 'is-invalid' : ''}" id="ticket-contact-field-${fieldKey}-${id}">
+                    <label class="contact-field-label" for="ticket-contact-input-${fieldKey}-${id}">${config.label}</label>
+                    <div class="contact-input-row">
+                        <input
+                            id="ticket-contact-input-${fieldKey}-${id}"
+                            type="${config.type || 'text'}"
+                            ${config.inputmode ? `inputmode="${config.inputmode}"` : ''}
+                            class="contact-input"
+                            value="${fieldValue}"
+                            placeholder="${config.placeholder}"
+                            oninput="handleTicketUserContactInput('${id}', '${fieldKey}', this)"
+                            onblur="handleTicketUserContactBlur('${id}', '${fieldKey}')">
+                        <div class="contact-input-actions" id="ticket-contact-actions-${fieldKey}-${id}">
+                            ${actions}
+                        </div>
+                    </div>
+                    <div class="contact-field-message" id="ticket-contact-error-${fieldKey}-${id}">${error ? escapeHtml(error) : ''}</div>
+                    ${
+                        fieldKey === 'cod_gestor'
+                            ? `<div id="ticket-contact-manager-info-${id}">${managerInfo}</div>`
+                            : ''
+                    }
+                </div>
+            `;
+        }
+
+        function buildTicketUserContactDrawer(id) {
+            const state = getTicketUserContactState(id);
+            if (!state) return '';
+
+            const solicitante = escapeHtml(state.solicitante || 'Solicitante');
+            const codigo = state.cod_usuario ? `${escapeHtml(state.cod_usuario)}` : '';
+            const canSave = canSaveTicketUserContact(id);
+
+            return `
+                <div class="contact-drawer-header">
+                    <div>
+                        <span class="contact-drawer-eyebrow">Solicitante</span>
+                        <h3 id="contact-drawer-title" class="contact-drawer-title">${solicitante}</h3>
+                        ${codigo ? `<p class="contact-drawer-subtitle">${codigo}</p>` : ''}
+                    </div>
+                    <button type="button" class="contact-drawer-close" onclick="closeTicketUserContactDrawer()" aria-label="Fechar edição de contatos">&times;</button>
+                </div>
+                <div class="contact-drawer-body">
+                    <section class="contact-card">
+                        <div class="contact-card-header">
+                            <h4>Contatos</h4>
+                        </div>
+                        <div class="contact-fields-grid">
+                            ${buildTicketUserContactField(id, 'teams_user', {
+                                label: 'Teams',
+                                placeholder: 'email@outlook.com',
+                                type: 'email',
+                            })}
+                            ${buildTicketUserContactField(id, 'whatsapp_user', {
+                                label: 'WhatsApp',
+                                placeholder: '(42) 99999-9999',
+                                inputmode: 'numeric',
+                            })}
+                            ${buildTicketUserContactField(id, 'cod_gestor', {
+                                label: 'Gestor',
+                                placeholder: 'Código do gestor',
+                                inputmode: 'numeric',
+                            })}
+                        </div>
+                    </section>
+                </div>
+                <div class="contact-drawer-footer">
+                    <button
+                        type="button"
+                        class="contact-drawer-btn contact-drawer-btn-primary"
+                        id="ticket-contact-save-btn-${id}"
+                        onclick="salvarContatoSolicitanteModal('${id}')"
+                        ${canSave ? '' : 'disabled'}>
+                        <span class="contact-save-spinner" style="display:${state.saving ? 'inline-flex' : 'none'};">
+                            <span class="contact-spinner"></span>
+                        </span>
+                        <i class="fas fa-save" style="display:${state.saving ? 'none' : 'inline-flex'};"></i>
+                        <span>${state.saving ? 'Salvando...' : 'Salvar'}</span>
+                    </button>
+                    <button type="button" class="contact-drawer-btn contact-drawer-btn-secondary" onclick="closeTicketUserContactDrawer()">Cancelar</button>
+                </div>
+            `;
+        }
+
+        function renderTicketUserContactDrawer(id = null) {
+            const ticketId = String(id || activeTicketContactDrawerId || '');
+            if (!ticketId) return;
+
+            const overlay = document.getElementById('contact-editor-drawer');
+            const container = document.getElementById('contact-editor-drawer-content');
+            if (!overlay || !container) return;
+
+            container.innerHTML = buildTicketUserContactDrawer(ticketId);
+            overlay.classList.add('is-open');
+            overlay.setAttribute('aria-hidden', 'false');
+            activeTicketContactDrawerId = ticketId;
+        }
+
+        function syncTicketUserContactFormUi(id) {
+            const ticketId = String(id);
+            const state = getTicketUserContactState(ticketId);
+            if (!state || activeTicketContactDrawerId !== ticketId) return;
+
+            validateTicketUserContactState(ticketId);
+
+            ['teams_user', 'whatsapp_user', 'cod_gestor'].forEach((fieldKey) => {
+                const fieldNode = document.getElementById(`ticket-contact-field-${fieldKey}-${ticketId}`);
+                const errorNode = document.getElementById(`ticket-contact-error-${fieldKey}-${ticketId}`);
+                const actionsNode = document.getElementById(`ticket-contact-actions-${fieldKey}-${ticketId}`);
+                if (fieldNode) {
+                    fieldNode.classList.toggle('is-invalid', Boolean(state.errors[fieldKey]));
+                }
+                if (errorNode) {
+                    errorNode.textContent = state.errors[fieldKey] || '';
+                }
+                if (actionsNode) {
+                    actionsNode.innerHTML = buildTicketContactActionButtons(ticketId, fieldKey);
+                }
+            });
+
+            const managerInfoNode = document.getElementById(`ticket-contact-manager-info-${ticketId}`);
+            if (managerInfoNode) {
+                managerInfoNode.innerHTML = buildTicketContactManagerInfo(ticketId);
+            }
+
+            const saveButton = document.getElementById(`ticket-contact-save-btn-${ticketId}`);
+            if (saveButton) {
+                saveButton.disabled = !canSaveTicketUserContact(ticketId);
+                const spinnerNode = saveButton.querySelector('.contact-save-spinner');
+                const iconNode = saveButton.querySelector('.fas');
+                const labelNode = saveButton.querySelector('span:last-child');
+                if (spinnerNode) spinnerNode.style.display = state.saving ? 'inline-flex' : 'none';
+                if (iconNode) iconNode.style.display = state.saving ? 'none' : 'inline-flex';
+                if (labelNode) labelNode.textContent = state.saving ? 'Salvando...' : 'Salvar';
+            }
+        }
+
+        function resetTicketUserContactForm(id) {
+            const state = getTicketUserContactState(id);
+            if (!state) return;
+
+            if (state.manager_debounce_timer) {
+                clearTimeout(state.manager_debounce_timer);
+                state.manager_debounce_timer = null;
+            }
+
+            state.form = {
+                teams_user: state.teams_user || '',
+                whatsapp_user: sanitizeWhatsAppDigits(state.whatsapp_user),
+                cod_gestor: sanitizeManagerCode(state.cod_gestor),
+            };
+            state.errors = {
+                teams_user: '',
+                whatsapp_user: '',
+                cod_gestor: '',
+            };
+            state.saving = false;
+            state.manager_lookup = {
+                loading: false,
+                code: '',
+                data: null,
+                error: '',
+                warning: '',
+            };
+
+            const gestorValue = sanitizeManagerCode(state.form.cod_gestor);
+            if (gestorValue && ticketUserLookupCache[gestorValue]) {
+                const cached = ticketUserLookupCache[gestorValue];
+                state.manager_lookup = {
+                    loading: false,
+                    code: gestorValue,
+                    data: cached.data || null,
+                    error: cached.error || '',
+                    warning: cached.warning || '',
+                };
+            }
+        }
+
+        function openTicketUserContactDrawer(id) {
+            const ticketId = String(id);
+            const state = getTicketUserContactState(ticketId);
+            if (!state || !state.cod_usuario) return;
+
+            resetTicketUserContactForm(ticketId);
+            renderTicketUserContactDrawer(ticketId);
+            syncTicketUserContactFormUi(ticketId);
+
+            const firstInput = document.getElementById(`ticket-contact-input-teams_user-${ticketId}`);
+            if (firstInput) firstInput.focus();
+
+            if (state.form.cod_gestor && !getManagerLookupState(state).data) {
+                ensureTicketManagerLookup(ticketId, { immediate: true });
+            }
+        }
+
+        function closeTicketUserContactDrawer() {
+            const overlay = document.getElementById('contact-editor-drawer');
+            const container = document.getElementById('contact-editor-drawer-content');
+            const ticketId = String(activeTicketContactDrawerId || '');
+            const state = getTicketUserContactState(ticketId);
+
+            if (state?.manager_debounce_timer) {
+                clearTimeout(state.manager_debounce_timer);
+                state.manager_debounce_timer = null;
+            }
+
+            activeTicketContactDrawerId = null;
+            if (overlay) {
+                overlay.classList.remove('is-open');
+                overlay.setAttribute('aria-hidden', 'true');
+            }
+            if (container) {
+                container.innerHTML = '';
+            }
+        }
+
+        function handleTicketUserContactInput(id, fieldKey, input) {
+            const state = getTicketUserContactState(id);
+            if (!state || !input) return;
+
+            if (fieldKey === 'teams_user') {
+                state.form.teams_user = String(input.value || '').trim();
+            } else if (fieldKey === 'whatsapp_user') {
+                state.form.whatsapp_user = sanitizeWhatsAppDigits(input.value);
+                input.value = formatWhatsAppValue(state.form.whatsapp_user);
+            } else if (fieldKey === 'cod_gestor') {
+                state.form.cod_gestor = sanitizeManagerCode(input.value);
+                input.value = state.form.cod_gestor;
+                state.manager_lookup = {
+                    loading: false,
+                    code: '',
+                    data: null,
+                    error: '',
+                    warning: '',
+                };
+                if (state.manager_debounce_timer) {
+                    clearTimeout(state.manager_debounce_timer);
+                    state.manager_debounce_timer = null;
+                }
+                if (state.form.cod_gestor) {
+                    ensureTicketManagerLookup(id, { immediate: false });
+                }
+            }
+
+            validateTicketUserContactState(id);
+            syncTicketUserContactFormUi(id);
+        }
+
+        function handleTicketUserContactBlur(id, fieldKey) {
+            const state = getTicketUserContactState(id);
+            if (!state) return;
+
+            if (fieldKey === 'cod_gestor') {
+                if (!state.form.cod_gestor) {
+                    state.manager_lookup = {
+                        loading: false,
+                        code: '',
+                        data: null,
+                        error: '',
+                        warning: '',
+                    };
+                } else {
+                    ensureTicketManagerLookup(id, { immediate: true });
+                }
+            }
+
+            validateTicketUserContactState(id);
+            syncTicketUserContactFormUi(id);
+        }
+
+        async function fetchTicketManagerLookup(id, code) {
+            const state = getTicketUserContactState(id);
+            const ticketId = String(id);
+            if (!state || !code) return;
+
+            if (ticketUserLookupCache[code]) {
+                const cached = ticketUserLookupCache[code];
+                state.manager_lookup = {
+                    loading: false,
+                    code,
+                    data: cached.data || null,
+                    error: cached.error || '',
+                    warning: cached.warning || '',
+                };
+                validateTicketUserContactState(ticketId);
+                syncTicketUserContactFormUi(ticketId);
+                return;
+            }
+
+            state.manager_request_seq = (state.manager_request_seq || 0) + 1;
+            const requestSeq = state.manager_request_seq;
+            state.manager_lookup = {
+                loading: true,
+                code,
+                data: null,
+                error: '',
+                warning: '',
+            };
+            validateTicketUserContactState(ticketId);
+            syncTicketUserContactFormUi(ticketId);
+
+            try {
+                const response = await fetch(`/api/erp/usuario/${encodeURIComponent(code)}`);
+                const result = await response.json();
+                if (state.manager_request_seq !== requestSeq || sanitizeManagerCode(state.form.cod_gestor) !== code) {
+                    return;
+                }
+
+                if (!response.ok || result.error) {
+                    const notFoundPayload = {
+                        data: null,
+                        error: 'Gestor não encontrado.',
+                        warning: '',
+                    };
+                    ticketUserLookupCache[code] = notFoundPayload;
+                    state.manager_lookup = {
+                        loading: false,
+                        code,
+                        data: null,
+                        error: notFoundPayload.error,
+                        warning: '',
+                    };
+                } else {
+                    const warning = result.ativo === false ? 'Usuário inativo' : '';
+                    const successPayload = {
+                        data: result,
+                        error: '',
+                        warning,
+                    };
+                    ticketUserLookupCache[code] = successPayload;
+                    state.manager_lookup = {
+                        loading: false,
+                        code,
+                        data: result,
+                        error: '',
+                        warning,
+                    };
+                }
+            } catch (error) {
+                console.error('Erro ao consultar gestor', error);
+                if (state.manager_request_seq !== requestSeq || sanitizeManagerCode(state.form.cod_gestor) !== code) {
+                    return;
+                }
+                state.manager_lookup = {
+                    loading: false,
+                    code,
+                    data: null,
+                    error: 'Gestor não encontrado.',
+                    warning: '',
+                };
+            }
+
+            validateTicketUserContactState(ticketId);
+            syncTicketUserContactFormUi(ticketId);
+        }
+
+        function ensureTicketManagerLookup(id, { immediate = false } = {}) {
+            const state = getTicketUserContactState(id);
+            if (!state) return;
+
+            const code = sanitizeManagerCode(state.form.cod_gestor);
+            if (state.manager_debounce_timer) {
+                clearTimeout(state.manager_debounce_timer);
+                state.manager_debounce_timer = null;
+            }
+
+            if (!code) {
+                state.manager_lookup = {
+                    loading: false,
+                    code: '',
+                    data: null,
+                    error: '',
+                    warning: '',
+                };
+                validateTicketUserContactState(id);
+                syncTicketUserContactFormUi(id);
+                return;
+            }
+
+            if (immediate) {
+                fetchTicketManagerLookup(id, code);
+                return;
+            }
+
+            state.manager_debounce_timer = setTimeout(() => {
+                state.manager_debounce_timer = null;
+                fetchTicketManagerLookup(id, code);
+            }, 500);
+        }
+
+        async function salvarContatoSolicitanteModal(id) {
+            const ticketId = String(id);
+            const state = getTicketUserContactState(ticketId);
+            if (!state || !state.cod_usuario) return;
+
+            validateTicketUserContactState(ticketId);
+            syncTicketUserContactFormUi(ticketId);
+            if (!canSaveTicketUserContact(ticketId)) return;
+
+            state.saving = true;
+            syncTicketUserContactFormUi(ticketId);
+
+            try {
+                const response = await fetch('/api/local/ticket_user_contact', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        cod_solicitacao: ticketId,
+                        cod_usuario: state.cod_usuario,
+                        teams_user: String(state.form.teams_user || '').trim(),
+                        whatsapp_user: sanitizeWhatsAppDigits(state.form.whatsapp_user),
+                        cod_gestor: sanitizeManagerCode(state.form.cod_gestor)
+                    })
+                });
+                const result = await response.json();
+                if (!response.ok || result.error) {
+                    throw new Error(result.error || 'Falha ao salvar contato do solicitante');
+                }
+
+                state.teams_user = result.teams_user || '';
+                state.whatsapp_user = sanitizeWhatsAppDigits(result.whatsapp_user || '');
+                state.cod_gestor = result.cod_gestor != null ? sanitizeManagerCode(result.cod_gestor) : '';
+                state.form = {
+                    teams_user: state.teams_user,
+                    whatsapp_user: state.whatsapp_user,
+                    cod_gestor: state.cod_gestor,
+                };
+                state.saving = false;
+                renderTicketUserContactSection(ticketId);
+                closeTicketUserContactDrawer();
+                showToast('Contato atualizado com sucesso.', 'success');
+                carregarKanban();
+            } catch (e) {
+                console.error('Erro ao salvar contato do solicitante', e);
+                state.saving = false;
+                syncTicketUserContactFormUi(ticketId);
+                showToast(e.message || 'Erro ao salvar contato do solicitante.', 'error');
+            }
+        }
+
         async function openDetails(id, columnId = null) {
             const modal = document.getElementById('details-modal');
             const content = document.getElementById('modal-content');
             const resolvedColumnId = columnId || currentModalContext.columnId;
             const snapshot = resolvedColumnId ? getColumnTickets(resolvedColumnId, false).map(t => ({ ...t })) : [];
+            closeTicketUserContactDrawer();
             currentModalContext = {
                 columnId: resolvedColumnId,
                 ticketId: String(id),
@@ -1338,6 +2152,7 @@
             try {
                 const res = await fetch(`/api/erp/chamado/${id}`);
                 const data = await res.json();
+                initializeTicketUserContactState(id, data);
                 content.innerHTML = `
                     ${buildModalNavigationHtml(resolvedColumnId, id)}
                     <div class="flow-container">
@@ -1359,32 +2174,10 @@
                     <div class="details-grid">
                         <div>
                             ${data.criador ? `<p><strong>Criador por:</strong> ${data.criador}</p>` : ``}
-                            <p><strong>Chamado:</strong> #${id}</p>
-                            <p>
-                            <div class="solicitante-linha mb-2">
-                                <strong>Solicitante:</strong>
-                            
-                                <span>
-                                    ${(data.cod_usuario ? `${data.cod_usuario} - ` : '')}${escapeHtml(data.solicitante)}
-                                </span>
-                            
-                                ${
-                                    data.teams_user
-                                    ? `
-                                    <button
-                                        type="button"
-                                        class="teams-icon-btn"
-                                        data-teams-user="${escapeHtml(data.teams_user)}"
-                                        onclick="abrirTeams(this.dataset.teamsUser)"
-                                        title="Abrir conversa no Microsoft Teams">
-                            
-                                        <img src="/static/img/teams.png" alt="Teams">
-                                    </button>
-                                    `
-                                    : ''
-                                }
+                            <p><strong>Chamado:</strong> ${id}</p>
+                            <div id="ticket-user-contact-${id}" class="mb-2">
+                                ${buildTicketUserContactSection(id)}
                             </div>
-
                             <p><strong>Assunto:</strong> ${data.assunto ? escapeHtml(data.assunto) : 'N/A'}</p>
                             <p><strong>Departamento:</strong> ${data.departamento ? escapeHtml(data.departamento) : 'N/A'}</p>
                             ${data.trello && data.trello.integrado ? `
@@ -1443,6 +2236,10 @@
         }
 
         function closeDetails() {
+            closeTicketUserContactDrawer();
+            if (currentModalContext.ticketId) {
+                delete ticketModalContactCache[String(currentModalContext.ticketId)];
+            }
             currentModalContext = { columnId: null, ticketId: null, ticketsSnapshot: [] };
             updateModalSideNav(null, null);
             document.getElementById('details-modal').style.display = 'none';

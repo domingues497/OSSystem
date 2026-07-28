@@ -76,6 +76,7 @@ class ChamadoService:
         erp_data = self.erp_repo.buscar_chamado_por_id(cod_solicitacao, access_scope=access_scope)
         if not erp_data:
             return None
+        autorizacoes = self.erp_repo.buscar_autorizacoes_chamado(cod_solicitacao)
 
         trello_card_id = erp_data.get('trello_card_id')
         trello_label_id = erp_data.get('trello_label_id')
@@ -134,6 +135,7 @@ class ChamadoService:
         foi_aprovado = False
         comentarios_fmt = []
         user_cache = {}
+        autorizacao_index = 0
         
         def _norm(s):
             return " ".join((s or "").replace("\r", " ").replace("\n", " ").split()).strip()
@@ -186,6 +188,48 @@ class ChamadoService:
                 return _cut_before_any(tail, ["Data", "Data/hora"])
 
             return ""
+
+        def _is_auth_request_text(text):
+            low = _norm(text).lower()
+            return (
+                "solicitou a autorização de um gerente para a execução do serviço" in low
+                or "solicitacao de autorizacao" in low
+                or "solicitação de autorização" in low
+            )
+
+        def _is_auth_forward_text(text):
+            low = _norm(text).lower()
+            return (
+                "encaminhado para autorização" in low
+                or "encaminhado para autorizacao" in low
+                or "enviado para autorização" in low
+                or "enviado para autorizacao" in low
+            )
+
+        def _format_auth_target(auth_item):
+            if not auth_item:
+                return ""
+            autorizadores = _norm(auth_item.get("autorizadores"))
+            status = _norm(auth_item.get("status"))
+            if autorizadores and status:
+                return f"Enviado para {autorizadores}. Status: {status}."
+            if autorizadores:
+                return f"Enviado para {autorizadores}."
+            if status:
+                return f"Status da autorização: {status}."
+            return ""
+
+        def _decorate_auth_request_text(text, auth_item):
+            normalized_text = _norm(text)
+            if not normalized_text:
+                return text
+            if "enviado para " in normalized_text.lower():
+                return text
+            auth_tail = _format_auth_target(auth_item)
+            if not auth_tail:
+                return text
+            separator = " " if not normalized_text.endswith((" ", "\n")) else ""
+            return f"{text.rstrip()}{separator}{auth_tail}"
         
         # Ordenar comentários para análise de fluxo (ASC para cronologia)
         comms_asc = sorted(comentarios, key=lambda r: (r['data_grav'], r['hora_grav']))
@@ -206,6 +250,15 @@ class ChamadoService:
                     u_name = self.erp_repo.buscar_usuario_por_id(cod_usuario)
                     user_cache[int(cod_usuario)] = u_name
             
+            auth_info = None
+            is_auth_request = _is_auth_request_text(txt_content)
+            is_auth_forward = _is_auth_forward_text(txt_content)
+            if is_auth_request and autorizacao_index < len(autorizacoes):
+                auth_info = autorizacoes[autorizacao_index]
+                autorizacao_index += 1
+            elif is_auth_forward:
+                auth_info = None
+
             is_system_auth = "SOLICITAÇÃO DE AUTORIZAÇÃO" in txt_upper
             is_system_status_change = "SOLICITAÇÃO ATUALIZADA PARA O STATUS" in txt_upper
             is_system_msg = is_system_auth or is_system_status_change
@@ -243,11 +296,12 @@ class ChamadoService:
 
             # Formatar comentário para exibição (reverso no final ou inserção no topo)
             if cod_usuario and int(cod_usuario) > 0:
+                texto_exibicao = _decorate_auth_request_text(txt_content, auth_info)
                 comentarios_fmt.insert(0, {
                     "data": dt_fmt,
                     "hora": hora_evt,
                     "usuario": u_name,
-                    "texto": txt_content,
+                    "texto": texto_exibicao,
                     "destacar": ("AUTORIZAÇÃO" in txt_upper and "APROVADA" in txt_upper) or ("SOLICITAÇÃO" in txt_upper and "APROVADA" in txt_upper)
                 })
 

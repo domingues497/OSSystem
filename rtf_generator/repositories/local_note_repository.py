@@ -1,4 +1,5 @@
 from database.local_connection import (
+    TABLE_CHAMADOS_USUARIOS,
     TABLE_NOTES,
     TABLE_TICKET_ASSIGNEES,
     get_local_connection,
@@ -114,3 +115,27 @@ class LocalNoteRepository:
         rows = cur.fetchall()
         conn.close()
         return [r[0] for r in rows]
+
+    def upsert_chamados_usuario_contato(self, cod_usuario, teams_user=None, whatsapp_user=None, cod_gestor=None):
+        conn = get_local_connection(self.db_path)
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            UPDATE {TABLE_CHAMADOS_USUARIOS}
+            SET teams_user = %s,
+                whatsapp_user = %s,
+                cod_gestor = %s
+            WHERE cod_usuario = %s
+            """,
+            (teams_user, whatsapp_user, cod_gestor, int(cod_usuario)),
+        )
+        if cur.rowcount == 0:
+            cur.execute(
+                f"""
+                INSERT INTO {TABLE_CHAMADOS_USUARIOS} (cod_usuario, teams_user, whatsapp_user, cod_gestor)
+                VALUES (%s, %s, %s, %s)
+                """,
+                (int(cod_usuario), teams_user, whatsapp_user, cod_gestor),
+            )
+        conn.commit()
+        conn.close()

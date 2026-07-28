@@ -37,3 +37,32 @@ class LocalNoteService:
 
     def listar_atendentes(self):
         return self.local_repo.get_distinct_assignees()
+
+    def salvar_contato_usuario_chamado(self, payload):
+        cod_usuario = payload.get('cod_usuario')
+        if not cod_usuario:
+            return {"error": "Usuario do chamado nao informado"}
+
+        teams_user = (payload.get('teams_user') or '').strip() or None
+        whatsapp_user = (payload.get('whatsapp_user') or '').strip() or None
+        raw_cod_gestor = (payload.get('cod_gestor') or '').strip()
+
+        cod_gestor = None
+        if raw_cod_gestor:
+            if not raw_cod_gestor.isdigit():
+                return {"error": "Codigo do gestor deve ser numerico"}
+            cod_gestor = int(raw_cod_gestor)
+
+        self.local_repo.upsert_chamados_usuario_contato(
+            cod_usuario=cod_usuario,
+            teams_user=teams_user,
+            whatsapp_user=whatsapp_user,
+            cod_gestor=cod_gestor,
+        )
+        return {
+            "success": True,
+            "cod_usuario": int(cod_usuario),
+            "teams_user": teams_user or "",
+            "whatsapp_user": whatsapp_user or "",
+            "cod_gestor": cod_gestor or "",
+        }

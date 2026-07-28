@@ -14,11 +14,30 @@ class ERPRepository:
             for part in raw_default.split(",")
             if part.strip().isdigit()
         ]
+        self._table_columns_cache = {}
 
     def _get_text_col(self, cur):
         cur.execute("SELECT * FROM BANCO01.DM1745 LIMIT 1")
         all_cols = [col[0].lower() for col in cur.description]
         return next((c for c in all_cols if 'descr' in c or 'texto' in c or 'obs' in c), "DESCR_ACOMP")
+
+    def _get_table_columns(self, cur, schema_name, table_name):
+        cache_key = f"{schema_name}.{table_name}".lower()
+        cached = self._table_columns_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        cur.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = %s
+              AND table_name = %s
+            """,
+            (schema_name.lower(), table_name.lower()),
+        )
+        columns = {str(row[0]).lower() for row in cur.fetchall()}
+        self._table_columns_cache[cache_key] = columns
+        return columns
 
     def _normalize_access_scope(self, access_scope=None):
         if access_scope and access_scope.get("is_admin"):
@@ -248,7 +267,9 @@ class ERPRepository:
                 TRELLO.ID_ROTULO AS TRELLO_LABEL_ID,
                 COALESCE(AUTH.req_count, 0) AS AUTH_REQ_COUNT,
                 COALESCE(AUTH.appr_count, 0) AS AUTH_APPR_COUNT,
-                U.teams_user as TEAMS_USER
+                U.teams_user as TEAMS_USER,
+                U.whatsapp_user as WHATSAPP_USER,
+                U.cod_gestor as COD_GESTOR
             FROM BANCO01.DM1744 
             LEFT JOIN public.DS0300 ON (DS0300.COD_USUARIO = DM1744.COD_USUARIO)
             LEFT JOIN BANCO01.DC1629 ON (DC1629.COD_ATIVO = DM1744.COD_ATIVO)
@@ -312,6 +333,47 @@ class ERPRepository:
         conn.close()
         return data
 
+    def buscar_autorizacoes_chamado(self, cod_solicitacao):
+        conn = get_erp_connection()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                A.COD_SOLICITACAO,
+                A.NUM_AUTORIZ_SERVICO,
+                A.COD_STATUS_DOC,
+                CASE A.COD_STATUS_DOC
+                    WHEN 'AP' THEN 'Aprovado'
+                    WHEN 'AV' THEN 'Em avaliação'
+                    WHEN 'RJ' THEN 'Rejeitado'
+                    ELSE 'Desconhecido'
+                END AS STATUS,
+                STRING_AGG(
+                    U.COD_USUARIO || ' - ' || U.NOME_USUARIO,
+                    ', '
+                    ORDER BY U.NOME_USUARIO
+                ) AS AUTORIZADORES
+            FROM BANCO01.DC1995 A
+            JOIN BANCO01.DC1997 AU
+                ON AU.NUM_AUTORIZ_SERVICO = A.NUM_AUTORIZ_SERVICO
+            JOIN public.DS0300 U
+                ON U.COD_USUARIO = AU.COD_USUARIO
+            WHERE A.COD_SOLICITACAO = %s
+            GROUP BY
+                A.COD_SOLICITACAO,
+                A.NUM_AUTORIZ_SERVICO,
+                A.COD_STATUS_DOC
+            ORDER BY A.NUM_AUTORIZ_SERVICO
+            """,
+            (cod_solicitacao,),
+        )
+        rows = cur.fetchall()
+        columns = [col[0].lower() for col in cur.description]
+        data = [dict(zip(columns, r)) for r in rows]
+        cur.close()
+        conn.close()
+        return data
+
     def buscar_usuario_por_id(self, cod_usuario):
         conn = get_erp_connection()
         cur = conn.cursor()
@@ -321,6 +383,137 @@ class ERPRepository:
         cur.close()
         conn.close()
         return name
+
+    def buscar_usuario_detalhe_por_id(self, cod_usuario):
+        conn = get_erp_connection()
+        cur = conn.cursor()
+        ds0300_columns = self._get_table_columns(cur, "public", "ds0300")
+
+        if "cod_usuario" not in ds0300_columns:
+            cur.close()
+            conn.close()
+            return None
+
+        name_column = next(
+            (
+                column_name
+                for column_name in (
+                    "nome_usuario",
+                    "nome",
+                    "descr_usuario",
+                )
+                if column_name in ds0300_columns
+            ),
+            None,
+        )
+        cargo_column = next(
+            (
+                column_name
+                for column_name in (
+                    "cargo",
+                    "descr_cargo",
+                    "descricao_cargo",
+                    "funcao",
+                    "descr_funcao",
+                    "cargo_usuario",
+                    "nome_cargo",
+                    "desc_cargo",
+                    "cod_cargo",
+                )
+                if column_name in ds0300_columns
+            ),
+            None,
+        )
+
+        active_candidates = [
+            ("ativo_raw", "ativo"),
+            ("inativo_raw", "inativo"),
+            ("data_desat_raw", "data_desat"),
+            ("status_raw", "status"),
+            ("situacao_raw", "situacao"),
+        ]
+
+        select_parts = ["cod_usuario"]
+        if name_column:
+            select_parts.append(f"{name_column} AS nome")
+        if cargo_column:
+            select_parts.append(f"{cargo_column} AS cargo")
+        for alias, column_name in active_candidates:
+            if column_name in ds0300_columns:
+                select_parts.append(f"{column_name} AS {alias}")
+
+        cur.execute(
+            f"""
+            SELECT {", ".join(select_parts)}
+            FROM public.DS0300
+            WHERE cod_usuario = %s
+            """,
+            (cod_usuario,),
+        )
+        row = cur.fetchone()
+        columns = [col[0].lower() for col in cur.description]
+        cur.close()
+        conn.close()
+
+        if not row:
+            return None
+
+        data = dict(zip(columns, row))
+
+        def _normalize_active(value, inverse=False):
+            if value is None:
+                return None
+            if isinstance(value, bool):
+                return (not value) if inverse else value
+            if isinstance(value, (int, float)):
+                normalized = value != 0
+                return (not normalized) if inverse else normalized
+
+            text = str(value).strip().lower()
+            if not text:
+                return None
+
+            if text in {"1", "s", "sim", "true", "t", "ativo", "a"}:
+                return not inverse
+            if text in {"0", "n", "nao", "não", "false", "f", "inativo", "i"}:
+                return inverse
+            if text in {"null", "none"}:
+                return None
+            return None
+
+        ativo = None
+        if "ativo_raw" in data:
+            ativo = _normalize_active(data.get("ativo_raw"))
+        if ativo is None and "inativo_raw" in data:
+            ativo = _normalize_active(data.get("inativo_raw"), inverse=True)
+        if ativo is None and "data_desat_raw" in data:
+            raw_data_desat = data.get("data_desat_raw")
+            if raw_data_desat in (None, "", 0, "0"):
+                ativo = True
+            else:
+                ativo = False
+        if ativo is None and "status_raw" in data:
+            status_text = str(data.get("status_raw") or "").strip().lower()
+            if "inat" in status_text:
+                ativo = False
+            elif "ativ" in status_text:
+                ativo = True
+        if ativo is None and "situacao_raw" in data:
+            situacao_text = str(data.get("situacao_raw") or "").strip().lower()
+            if "inat" in situacao_text:
+                ativo = False
+            elif "ativ" in situacao_text:
+                ativo = True
+
+        cargo = str(data.get("cargo") or "").strip()
+        nome = str(data.get("nome") or "").strip()
+
+        return {
+            "cod_usuario": int(data.get("cod_usuario")),
+            "nome": nome,
+            "cargo": cargo,
+            "ativo": ativo,
+        }
 
     def buscar_trello_sem_rotulo_base(self, limit=30, access_scope=None):
         conn = get_erp_connection()

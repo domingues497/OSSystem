@@ -67,6 +67,18 @@ def get_chamado_detalhe(cod_solicitacao):
         return jsonify({"error": "Chamado não encontrado"}), 404
     return jsonify(data)
 
+@erp_bp.route('/usuario/<cod_usuario>')
+def get_usuario_por_codigo(cod_usuario):
+    try:
+        codigo = int(cod_usuario)
+    except Exception:
+        return jsonify({"error": "Codigo de usuario invalido"}), 400
+
+    data = erp_repo.buscar_usuario_detalhe_por_id(codigo)
+    if not data:
+        return jsonify({"error": "Usuario nao encontrado"}), 404
+    return jsonify(data)
+
 @erp_bp.route('/estatisticas')
 def get_estatisticas():
     start = request.args.get('start_date')
