@@ -1122,6 +1122,33 @@
                     </div>
 
                     <div class="tab-panel active" data-tab-panel="dados">
+                        {% if is_create %}
+                        <div class="section-card" style="background: linear-gradient(180deg, rgba(0,112,184,0.04), #fff); border-color: rgba(0,112,184,0.14);">
+                            <div class="title-row">
+                                <h4><i class="fas fa-copy" style="color: var(--capal-blue); margin-right: 8px;"></i>Copiar de outro usuario</h4>
+                                <span class="tooltip">
+                                    <button type="button" class="tooltip-icon" aria-label="Ajuda sobre copiar usuario">?</button>
+                                    <span class="tooltip-box">Selecione um usuario existente para usar suas configuracoes como modelo. Apenas nome, usuario e senha serao diferentes.</span>
+                                </span>
+                            </div>
+                            <div class="fields-grid">
+                                <div class="field full" style="margin-bottom: 0;">
+                                    <label for="{{ modal_id }}-template-user">Usuario modelo</label>
+                                    <div style="display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap;">
+                                        <select id="{{ modal_id }}-template-user" style="flex: 1 1 260px; min-height: 46px; border: 1px solid rgba(31, 47, 32, 0.12); border-radius: var(--radius-control); padding: 0 14px; font: inherit; color: var(--text); background: #fff; outline: none;">
+                                            <option value="">-- Selecione um usuario para copiar --</option>
+                                            {% for tpl in managed_users %}
+                                            <option value="{{ tpl.id }}">{{ tpl.display_name }} (@{{ tpl.username }})</option>
+                                            {% endfor %}
+                                        </select>
+                                        <button type="button" class="btn-secondary" onclick="applyUserTemplate('{{ modal_id }}')">
+                                            <i class="fas fa-paste"></i> Aplicar modelo
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
                         <div class="section-card">
                             <div class="title-row">
                                 <h4>Dados principais</h4>
@@ -1473,6 +1500,9 @@
                     </div>
 
                     <div class="user-actions">
+                        <button type="button" class="btn-ghost" title="Usar como modelo para novo usuario" onclick="openCreateWithTemplate('{{ user.id }}')">
+                            <i class="fas fa-copy"></i> Copiar
+                        </button>
                         <button type="button" class="btn-secondary" onclick="openModal('modal-user-{{ user.id }}')">
                             <i class="fas fa-pen"></i> Editar
                         </button>
@@ -1495,7 +1525,87 @@
     {% endfor %}
 
     <script>
+        const TEMPLATE_USERS_DATA = {
+            {% for u in managed_users %}
+            "{{ u.id }}": {
+                id: {{ u.id }},
+                display_name: {{ u.display_name | tojson }},
+                username: {{ u.username | tojson }},
+                profile: {{ u.profile | tojson }},
+                is_active: {{ 'true' if u.is_active else 'false' }},
+                chart_show_external: {{ 'true' if u.chart_show_external else 'false' }},
+                chart_show_internal: {{ 'true' if u.chart_show_internal else 'false' }},
+                chart_status_codes: {{ (u.chart_status_codes or []) | tojson }},
+                kanban_status_codes: {{ (u.kanban_status_codes or []) | tojson }},
+                subject_codes: {{ (u.subjects or []) | map(attribute='cod_assunto') | list | tojson }},
+                department_codes: {{ (u.departments or []) | map(attribute='cod_depar') | list | tojson }}
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        };
+
         let currentUserFilter = 'all';
+
+        function openCreateWithTemplate(userId) {
+            const modalId = 'modal-create-user';
+            openModal(modalId);
+            const tplSelect = document.getElementById(`${modalId}-template-user`);
+            if (tplSelect) tplSelect.value = String(userId);
+            applyUserTemplate(modalId);
+        }
+
+        function applyUserTemplate(modalId) {
+            const modal = document.getElementById(modalId);
+            if (!modal) return;
+            const tplSelect = document.getElementById(`${modalId}-template-user`);
+            const userId = tplSelect ? String(tplSelect.value || '') : '';
+            if (!userId || !TEMPLATE_USERS_DATA[userId]) {
+                return;
+            }
+            const tpl = TEMPLATE_USERS_DATA[userId];
+
+            const profileSelect = modal.querySelector('select[name="profile"]');
+            if (profileSelect) {
+                profileSelect.value = tpl.profile || 'subject';
+            }
+
+            const activeInput = modal.querySelector('input[name="is_active"]');
+            if (activeInput) activeInput.checked = !!tpl.is_active;
+
+            const chartExt = modal.querySelector('input[name="chart_show_external"]');
+            if (chartExt) chartExt.checked = !!tpl.chart_show_external;
+            const chartInt = modal.querySelector('input[name="chart_show_internal"]');
+            if (chartInt) chartInt.checked = !!tpl.chart_show_internal;
+
+            modal.querySelectorAll('input[name="chart_status_codes"]').forEach((cb) => {
+                cb.checked = (tpl.chart_status_codes || []).includes(cb.value);
+            });
+
+            modal.querySelectorAll('input[name="kanban_status_codes"]').forEach((cb) => {
+                cb.checked = (tpl.kanban_status_codes || []).includes(cb.value);
+            });
+
+            modal.querySelectorAll('input[name="subject_codes"]').forEach((cb) => {
+                cb.checked = (tpl.subject_codes || []).map(String).includes(String(cb.value));
+            });
+
+            modal.querySelectorAll('input[name="department_codes"]').forEach((cb) => {
+                cb.checked = (tpl.department_codes || []).map(String).includes(String(cb.value));
+            });
+
+            const nameInput = modal.querySelector('input[name="display_name"]');
+            if (nameInput) nameInput.value = '';
+            const userInput = modal.querySelector('input[name="username"]');
+            if (userInput) userInput.value = '';
+            const pwdInput = modal.querySelector('input[name="password"]');
+            if (pwdInput) pwdInput.value = '';
+            const pwd2Input = modal.querySelector('input[name="confirm_password"]');
+            if (pwd2Input) pwd2Input.value = '';
+
+            syncProfileSections(modalId);
+            updateModalSummary(modalId);
+            const firstField = modal.querySelector('input[name="display_name"]');
+            if (firstField) firstField.focus();
+        }
 
         function getVisibleWizardSteps(modal) {
             if (!modal) return [];
