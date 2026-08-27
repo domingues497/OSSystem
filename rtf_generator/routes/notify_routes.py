@@ -7,10 +7,87 @@ from repositories.erp_repository import ERPRepository
 from repositories.local_alert_repository import LocalAlertRepository
 from repositories.local_access_repository import LocalAccessRepository
 from services.telegram_service import TelegramService
+from services.produtividade_service import ProdutividadeService
 from config import Config
 from utils.datetime_utils import erp_to_datetime, add_business_minutes, business_minutes_between
 
 notify_bp = Blueprint('notify', __name__)
+
+def _build_daily_productivity_block(day_date=None, max_tecnicos=30):
+    day_date = day_date or datetime.now()
+    start_erp = int(day_date.strftime('%Y%m%d'))
+    end_erp = start_erp
+    try:
+        erp_repo = ERPRepository()
+        svc = ProdutividadeService(erp_repo)
+        eventos = erp_repo.buscar_produtividade_por_tecnico(start_erp, end_erp, access_scope=None)
+    except Exception:
+        return ""
+
+    by_tec = {}
+    seen_unique_ticket = set()
+    unknown_key = svc._unknown if hasattr(svc, "_unknown") else "NÃO IDENTIFICADO"
+    for ev in eventos:
+        tipo = ev.get("tipo")
+        cod = ev.get("cod_solicitacao")
+        texto = ev.get("texto") or ""
+        tecnico_raw = svc._extract_tecnico(tipo, texto) if hasattr(svc, "_extract_tecnico") else "---"
+        tecnico_raw = tecnico_raw or "---"
+        tecnico = svc._normalize_tecnico_alias(tecnico_raw) if hasattr(svc, "_normalize_tecnico_alias") else tecnico_raw
+
+        if tipo in {"enviado", "andamento"} and cod is not None:
+            key = (tipo, cod)
+            if key in seen_unique_ticket:
+                continue
+            seen_unique_ticket.add(key)
+        if tecnico not in by_tec:
+            by_tec[tecnico] = {"enviados": 0, "andamento": 0, "finalizados": 0, "encerrados": 0}
+        if tipo == "enviado":
+            by_tec[tecnico]["enviados"] += 1
+        elif tipo == "andamento":
+            by_tec[tecnico]["andamento"] += 1
+        elif tipo == "finalizado":
+            by_tec[tecnico]["finalizados"] += 1
+        elif tipo == "encerrado":
+            by_tec[tecnico]["encerrados"] += 1
+
+    if not by_tec:
+        return ""
+
+    ranked = []
+    for tec, v in by_tec.items():
+        total = (v.get("andamento") or 0) + (v.get("finalizados") or 0) + (v.get("encerrados") or 0)
+        enviados = v.get("enviados") or 0
+        ranked.append((tec, total, enviados, v.get("andamento") or 0, v.get("finalizados") or 0, v.get("encerrados") or 0))
+    ranked.sort(key=lambda x: (-x[1], -x[2], x[0]))
+
+    total_geral = sum(x[1] for x in ranked)
+    total_enviados_geral = sum(x[2] for x in ranked)
+
+    lines = []
+    lines.append("")
+    lines.append("Chamados por colaborador (hoje)")
+    lines.append(f"Total interações: {total_geral} | Criados: {total_enviados_geral}")
+
+    show = ranked[:max_tecnicos]
+    for tec, total, enviados, andamento, finalizados, encerrados in show:
+        label = tec if tec and tec != "---" else unknown_key
+        parts = []
+        if enviados:
+            parts.append(f"+{enviados}")
+        if andamento:
+            parts.append(f"and {andamento}")
+        if finalizados:
+            parts.append(f"fim {finalizados}")
+        if encerrados:
+            parts.append(f"enc {encerrados}")
+        detail = f" [{', '.join(parts)}]" if parts else ""
+        lines.append(f"- {label}: {total}{detail}")
+
+    if len(ranked) > max_tecnicos:
+        lines.append(f"... +{len(ranked) - max_tecnicos} colaboradores")
+
+    return "\n".join(lines)
 
 def _format_br_dt_hhmm(dt_str):
     try:
@@ -123,6 +200,19 @@ def run_access_report_job(force=False, dry_run=False):
             f"Último acesso: {last_access_br}" if last_access_br else "Último acesso: -",
             f"IPs únicos: {uniq} | Requisições: {total_requests}",
         ]
+
+        productivity_block = _build_daily_productivity_block(day_date=now)
+        if productivity_block:
+            lines.append(productivity_block)
+            lines.append("")
+            lines.append("---")
+            lines.append("Acessos detalhados (IPs)")
+        else:
+            lines.append("")
+            lines.append("Chamados por colaborador (hoje): sem dados.")
+            lines.append("")
+            lines.append("---")
+            lines.append("Acessos detalhados (IPs)")
 
         sorted_ips = sorted(ips_data.items(), key=lambda x: x[1]["count"], reverse=True)
         max_ips = 60
