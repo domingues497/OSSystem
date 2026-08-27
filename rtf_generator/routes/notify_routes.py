@@ -36,7 +36,7 @@ def _build_daily_productivity_block(day_date=None, max_tecnicos=30):
         tecnico = svc._normalize_tecnico_alias(tecnico_raw) if hasattr(svc, "_normalize_tecnico_alias") else tecnico_raw
 
         if tipo in {"enviado", "andamento"} and cod is not None:
-            key = (tipo, cod)
+            key = (tipo, start_erp, cod)
             if key in seen_unique_ticket:
                 continue
             seen_unique_ticket.add(key)
@@ -56,32 +56,46 @@ def _build_daily_productivity_block(day_date=None, max_tecnicos=30):
 
     ranked = []
     for tec, v in by_tec.items():
-        total = (v.get("andamento") or 0) + (v.get("finalizados") or 0) + (v.get("encerrados") or 0)
         enviados = v.get("enviados") or 0
-        ranked.append((tec, total, enviados, v.get("andamento") or 0, v.get("finalizados") or 0, v.get("encerrados") or 0))
-    ranked.sort(key=lambda x: (-x[1], -x[2], x[0]))
+        andamento = v.get("andamento") or 0
+        finalizados = v.get("finalizados") or 0
+        encerrados = v.get("encerrados") or 0
+        total = andamento + finalizados
+        ranked.append((tec, total, enviados, andamento, finalizados, encerrados))
+
+    ranked.sort(key=lambda x: (-x[1], -x[4], -x[3], x[0]))
 
     total_geral = sum(x[1] for x in ranked)
     total_enviados_geral = sum(x[2] for x in ranked)
+    total_andamento_geral = sum(x[3] for x in ranked)
+    total_finalizados_geral = sum(x[4] for x in ranked)
+    total_encerrados_geral = sum(x[5] for x in ranked)
+
+    dow_map = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+    dow_label = dow_map[day_date.weekday()] if day_date else ""
+    d_label = day_date.strftime("%d/%m/%Y")
+    cabecalho_data = f"{d_label} ({dow_label})" if dow_label else d_label
 
     lines = []
     lines.append("")
-    lines.append("Chamados por colaborador (hoje)")
-    lines.append(f"Total interações: {total_geral} | Criados: {total_enviados_geral}")
+    lines.append(f"📊 Produtividade do dia - {cabecalho_data}")
+    lines.append(f"Total: {total_geral} | Em andamento: {total_andamento_geral} | Finalizados: {total_finalizados_geral} | Encerrados: {total_encerrados_geral} | Criados: {total_enviados_geral}")
+    lines.append("")
+    lines.append("Consolidado por colaborador:")
 
     show = ranked[:max_tecnicos]
     for tec, total, enviados, andamento, finalizados, encerrados in show:
         label = tec if tec and tec != "---" else unknown_key
         parts = []
         if enviados:
-            parts.append(f"+{enviados}")
+            parts.append(f"Env {enviados}")
         if andamento:
-            parts.append(f"and {andamento}")
+            parts.append(f"And {andamento}")
         if finalizados:
-            parts.append(f"fim {finalizados}")
+            parts.append(f"Fim {finalizados}")
         if encerrados:
-            parts.append(f"enc {encerrados}")
-        detail = f" [{', '.join(parts)}]" if parts else ""
+            parts.append(f"Enc {encerrados}")
+        detail = f" ({', '.join(parts)})" if parts else ""
         lines.append(f"- {label}: {total}{detail}")
 
     if len(ranked) > max_tecnicos:
