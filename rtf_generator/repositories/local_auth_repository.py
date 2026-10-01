@@ -653,6 +653,48 @@ class LocalAuthRepository:
         except Exception as e:
             raise DBConnectionError(str(e))
 
+    def ensure_bootstrap_admin(self, username, password, display_name):
+        username = (username or "").strip()
+        password = password or ""
+        display_name = (display_name or "").strip() or username
+        if not username or not password:
+            return False, "Credenciais incompletas."
+        try:
+            self._ensure_initialized()
+        except DBConnectionError as e:
+            return False, f"Sem conexao com o banco: {e}"
+        existing = self.count_users()
+        try:
+            if existing == 0:
+                self.create_user(
+                    username=username,
+                    password=password,
+                    display_name=display_name,
+                    profile="admin",
+                    subjects=[],
+                    departments=[],
+                    is_active=True,
+                )
+                return True, "Usuario admin criado com sucesso."
+            user = self.get_user_by_username(username)
+            if user:
+                self.update_user(
+                    user_id=user["id"],
+                    display_name=display_name,
+                    profile="admin",
+                    is_active=True,
+                    password=password,
+                    subjects=None,
+                    departments=None,
+                    chart_flags=None,
+                    chart_status_codes=None,
+                    kanban_status_codes=None,
+                )
+                return True, "Usuario admin atualizado com sucesso."
+            return False, "Ja existem usuarios cadastrados e o usuario informado nao existe."
+        except Exception as e:
+            return False, str(e)
+
     def get_user_with_subjects(self, user_id):
         conn = get_local_connection(self.db_path)
         cur = conn.cursor()

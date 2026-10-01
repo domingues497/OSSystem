@@ -403,16 +403,6 @@
                         Estamos com dificuldade para acessar o banco de dados do ERP.
                         Isso geralmente indica um problema de conexão de rede ou servidor.
                     </p>
-                    <div class="brand-values">
-                        <span class="brand-chip">🔌 Verifique a Rede</span>
-                        <span class="brand-chip">🔐 Confira a VPN</span>
-                        <span class="brand-chip">🏢 Servidor ERP</span>
-                    </div>
-                </div>
-                <div class="brand-bottom">
-                    <p class="brand-text" style="font-size: 0.9rem; opacity: 0.88;">
-                        Nenhuma operação é perdida — assim que a conexão for reestabelecida, tudo voltará a funcionar.
-                    </p>
                 </div>
             </div>
             <div class="login-panel">
@@ -420,59 +410,16 @@
                     <h1>Sem Conexão</h1>
                     <span class="subtitle">Revise a conexão antes de continuar</span>
                     <div class="divider"></div>
-                    <p class="intro-text">
-                        O sistema não conseguiu se conectar ao banco de dados.
-                        Execute os passos abaixo e depois tente novamente.
-                    </p>
+
 
                     <div class="alert-box">
-                        ⚠️ A comunicação com o servidor ERP falhou. A página <strong>não</strong> travou — só precisamos de acesso ao banco.
+                        A comunicação com o servidor ERP falhou. A página <strong>não</strong> travou — só precisamos de acesso ao banco.
                     </div>
 
-                    {% if host or port or db_name or user %}
-                    <div class="config-box">
-                        <span class="config-box-title">📡 Configuração Atual</span>
-                        {% if host %}
-                        <div class="config-row">
-                            <span class="config-label">Host ERP</span>
-                            <span class="config-value">{{ host }}</span>
-                        </div>
-                        {% endif %}
-                        {% if port %}
-                        <div class="config-row">
-                            <span class="config-label">Porta</span>
-                            <span class="config-value">{{ port }}</span>
-                        </div>
-                        {% endif %}
-                        {% if db_name %}
-                        <div class="config-row">
-                            <span class="config-label">Banco</span>
-                            <span class="config-value">{{ db_name }}</span>
-                        </div>
-                        {% endif %}
-                        {% if user %}
-                        <div class="config-row">
-                            <span class="config-label">Usuário</span>
-                            <span class="config-value">{{ user }}</span>
-                        </div>
-                        {% endif %}
-                    </div>
-                    {% endif %}
-
-                    <div class="checklist">
-                        <span class="checklist-title">✅ Lista de Verificação</span>
-                        <ul>
-                            <li>Conecte-se à <strong>VPN da empresa</strong> (se estiver fora da rede física).</li>
-                            <li>Faça ping: <code>ping 192.168.1.100</code> e confirme resposta.</li>
-                            <li>Verifique com a TI se o <strong>PostgreSQL da Capal</strong> está rodando.</li>
-                            <li>Confirme que a porta <code>6432</code> não está bloqueada por firewall.</li>
-                            <li>Revise as credenciais no arquivo <code>.env</code> da pasta <code>rtf_generator</code>.</li>
-                        </ul>
-                    </div>
-
+                    
                     <div class="details-box">
                         <button type="button" class="details-toggle" id="detailsBtn">
-                            <span>🔍 Detalhes técnicos do erro</span>
+                            <span>Detalhes do erro</span>
                             <span class="details-arrow" id="detailsArrow">▼</span>
                         </button>
                         <div class="details-content" id="detailsContent">
@@ -482,10 +429,10 @@
 
                     <div class="button-row">
                         <a href="/" onclick="event.preventDefault(); window.location.reload();" class="login-button">
-                            🔄 Tentar Novamente
+                            Tentar Novamente
                         </a>
                         <a href="/login" class="login-button secondary">
-                            🔐 Tela Login
+                            Tela Login
                         </a>
                     </div>
 

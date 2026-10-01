@@ -134,6 +134,25 @@ def _render_connection_error(exc=None, refresh=False):
     ), 503
 
 
+def _try_bootstrap_admin(app):
+    admin_user = os.getenv("BOOTSTRAP_ADMIN_USER", "").strip()
+    admin_pass = os.getenv("BOOTSTRAP_ADMIN_PASS", "")
+    admin_name = os.getenv("BOOTSTRAP_ADMIN_NAME", "").strip() or admin_user
+    if not admin_user or not admin_pass:
+        return
+    auth_repo = app.extensions.get("local_auth_repo")
+    if not auth_repo:
+        return
+    try:
+        ok, msg = auth_repo.ensure_bootstrap_admin(admin_user, admin_pass, admin_name)
+        if ok:
+            app.logger.info(f"[bootstrap] {msg} Usuario: {admin_user}")
+        else:
+            app.logger.info(f"[bootstrap] Nao feito: {msg}")
+    except Exception as e:
+        app.logger.info(f"[bootstrap] Falhou (provavelmente sem DB ainda): {e}")
+
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
@@ -156,12 +175,17 @@ def create_app():
     auth_repo = LocalAuthRepository(app.config['LOCAL_DB'])
     app.extensions["local_auth_repo"] = auth_repo
 
+    _try_bootstrap_admin(app)
+
     @app.route("/connection-error")
     def connection_error_page():
         return _render_connection_error(refresh=True)
 
+    _bootstrap_admin_done = False
+
     @app.before_request
     def _check_db_connection():
+        nonlocal _bootstrap_admin_done
         p = request.path or ""
         if p.startswith("/static/") or p == "/favicon.ico" or p == "/connection-error":
             return
@@ -173,6 +197,9 @@ def create_app():
             if p == "/login":
                 return None
             return _render_connection_error(refresh=False)
+        if not _bootstrap_admin_done:
+            _try_bootstrap_admin(app)
+            _bootstrap_admin_done = True
 
     @app.before_request
     def _track_access():
