@@ -1,15 +1,22 @@
 # Comandos para iniciar o servidor do Sistema de Apoio a Chamados ERP
 
 # 1. Navegar para a pasta do projeto
-cd "d:\trabalhos faculdaded\OSSystem\rtf_generator"
+cd "c:\Projetos\OSSystem\rtf_generator"
 
 # 2. Ativar o ambiente virtual (Windows)
 .\venv\Scripts\activate
 
-# 3. Instalar as dependências (caso seja a primeira vez ou haja mudanças)
+# 3. Instalar as dependencias (caso seja a primeira vez ou haja mudancas)
 pip install -r requirements.txt
 
 # 4. Iniciar o servidor Flask
-python app_modular.py
+.\venv\Scripts\python.exe app.py
 
-# O sistema estará disponível em: http://127.0.0.1:5000/
+# O sistema estara disponivel em: http://127.0.0.1:5000/
+
+# --- Backend Django ---
+# Em outro terminal:
+cd "c:\Projetos\OSSystem\backend"
+.\venv\Scripts\activate
+pip install -r requirements.txt
+.\venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000

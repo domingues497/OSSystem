@@ -2,10 +2,11 @@ import os
 import logging
 import threading
 import time
+import traceback
 from datetime import datetime, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
-from flask import Flask, request
+from flask import Flask, request, jsonify, render_template, url_for
 
 _backend_env_path = Path(__file__).resolve().parent.parent / "backend" / ".env"
 load_dotenv(dotenv_path=_backend_env_path, override=False)
@@ -15,18 +16,26 @@ from routes.erp_routes import erp_bp
 from routes.local_routes import local_bp
 from routes.notify_routes import notify_bp, run_access_report_job
 from routes.web_routes import web_bp
-from database.local_connection import init_local_db
+from database.local_connection import (
+    DBConnectionError,
+    get_db_status,
+    init_local_db,
+)
 from repositories.local_access_repository import LocalAccessRepository
 from repositories.local_auth_repository import LocalAuthRepository
 from utils.auth_utils import get_current_user, is_logged_in, unauthorized_response
 
+import psycopg2
+
 _access_report_scheduler_started = False
+
 
 def _env_bool(name, default=True):
     raw = os.getenv(name)
     if raw is None:
         return bool(default)
     return str(raw).strip().lower() in {"1", "true", "yes", "y", "on"}
+
 
 def _parse_hhmm(value, default_h=18, default_m=30):
     raw = (value or "").strip()
@@ -42,12 +51,14 @@ def _parse_hhmm(value, default_h=18, default_m=30):
     except Exception:
         return default_h, default_m
 
+
 def _next_run_at(hour, minute, now=None):
     now = now or datetime.now()
     run_at = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
     if run_at <= now:
         run_at = run_at + timedelta(days=1)
     return run_at
+
 
 def _start_access_report_scheduler(app):
     global _access_report_scheduler_started
@@ -91,26 +102,77 @@ def _start_access_report_scheduler(app):
     t.start()
     _access_report_scheduler_started = True
 
+
+def _is_db_error(exc):
+    return isinstance(exc, (DBConnectionError, psycopg2.OperationalError, psycopg2.InterfaceError))
+
+
+def _render_connection_error(exc=None, refresh=False):
+    status = get_db_status(refresh=refresh)
+    error_detail = ""
+    if status.get("error"):
+        error_detail = status["error"]
+    elif exc:
+        try:
+            error_detail = str(exc)
+        except Exception:
+            error_detail = traceback.format_exc(limit=8)
+    if request.path.startswith("/api/"):
+        return jsonify({
+            "error": "Falha na conexao com o banco de dados.",
+            "detail": error_detail,
+            "host": status.get("host"),
+            "port": status.get("port"),
+        }), 503
+    return render_template(
+        "connection_error.html",
+        host=status.get("host"),
+        port=status.get("port"),
+        db_name=status.get("db_name"),
+        user=status.get("user"),
+        error_detail=error_detail,
+    ), 503
+
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
     app.secret_key = app.config["SECRET_KEY"]
     app.permanent_session_lifetime = timedelta(hours=12)
 
-    # Configurar logging
     logging.basicConfig(level=logging.INFO)
     app.logger.setLevel(logging.INFO)
 
-    # Inicializar pastas necessárias
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     os.makedirs(app.config['GENERATED_FOLDER'], exist_ok=True)
-    
-    # Inicializar schema/tabelas auxiliares apenas quando explicitamente habilitado
-    if app.config.get('INIT_LOCAL_DB_ON_START'):
-        init_local_db(app.config['LOCAL_DB'])
+
+    try:
+        if app.config.get('INIT_LOCAL_DB_ON_START'):
+            init_local_db(app.config['LOCAL_DB'])
+    except Exception as e:
+        app.logger.warning(f"[startup] init_local_db pulado (sem conexao?): {e}")
+
     access_repo = LocalAccessRepository(app.config['LOCAL_DB'])
     auth_repo = LocalAuthRepository(app.config['LOCAL_DB'])
     app.extensions["local_auth_repo"] = auth_repo
+
+    @app.route("/connection-error")
+    def connection_error_page():
+        return _render_connection_error(refresh=True)
+
+    @app.before_request
+    def _check_db_connection():
+        p = request.path or ""
+        if p.startswith("/static/") or p == "/favicon.ico" or p == "/connection-error":
+            return
+        if p.startswith("/api/notify"):
+            return
+        refresh = p in {"/", "/login"}
+        status = get_db_status(refresh=refresh)
+        if not status["ok"]:
+            if p == "/login":
+                return None
+            return _render_connection_error(refresh=False)
 
     @app.before_request
     def _track_access():
@@ -126,10 +188,8 @@ def create_app():
             display_name = str(current_user.get("display_name") or "").strip()
             user_label = display_name or username or "-"
             user_label = user_label.replace("|", "/")
-            
-            # Log de acesso em arquivo de texto
+
             log_path = os.path.join(app.root_path, "access.log")
-            from datetime import datetime
             now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             with open(log_path, "a", encoding="utf-8") as f:
                 f.write(f"{now_str}|{ip}|{p}|{ua}|{user_label}\n")
@@ -140,7 +200,7 @@ def create_app():
     @app.before_request
     def _require_auth():
         p = request.path or ""
-        if p.startswith("/static/") or p in {"/favicon.ico", "/login"}:
+        if p.startswith("/static/") or p in {"/favicon.ico", "/login", "/connection-error"}:
             return
         if p.startswith("/api/notify"):
             return
@@ -153,7 +213,37 @@ def create_app():
             return
         return unauthorized_response()
 
-    # Registrar Blueprints
+    @app.errorhandler(DBConnectionError)
+    def handle_db_conn_error(exc):
+        app.logger.error(f"[erro DB] DBConnectionError: {exc}")
+        return _render_connection_error(exc=exc, refresh=True)
+
+    @app.errorhandler(psycopg2.OperationalError)
+    def handle_psycopg_op_error(exc):
+        app.logger.error(f"[erro DB] OperationalError: {exc}")
+        return _render_connection_error(exc=exc, refresh=True)
+
+    @app.errorhandler(psycopg2.InterfaceError)
+    def handle_psycopg_iface_error(exc):
+        app.logger.error(f"[erro DB] InterfaceError: {exc}")
+        return _render_connection_error(exc=exc, refresh=True)
+
+    @app.errorhandler(500)
+    def handle_500(exc):
+        if _is_db_error(exc):
+            return _render_connection_error(exc=exc, refresh=True)
+        app.logger.error(f"[500] {request.path}: {exc}")
+        if request.path.startswith("/api/"):
+            return jsonify({"error": "Erro interno no servidor.", "detail": str(exc)}), 500
+        return render_template(
+            "connection_error.html",
+            host=os.getenv("ERP_DB_HOST"),
+            port=os.getenv("ERP_DB_PORT"),
+            db_name=os.getenv("ERP_DB_NAME"),
+            user=os.getenv("ERP_DB_USER"),
+            error_detail=f"Erro inesperado: {exc}",
+        ), 500
+
     app.register_blueprint(web_bp)
     app.register_blueprint(erp_bp, url_prefix='/api/erp')
     app.register_blueprint(local_bp, url_prefix='/api/local')
@@ -162,6 +252,7 @@ def create_app():
     _start_access_report_scheduler(app)
 
     return app
+
 
 if __name__ == '__main__':
     app = create_app()

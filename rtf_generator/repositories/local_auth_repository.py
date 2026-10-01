@@ -8,8 +8,10 @@ from database.local_connection import (
     TABLE_USER_SUBJECTS,
     TABLE_USER_DEPARTMENTS,
     TABLE_USERS,
+    DBConnectionError,
     get_local_connection,
     init_local_db,
+    get_db_status,
 )
 from utils.chamados_filters import normalize_chamados_filter_ids
 from utils.dashboard_statuses import (
@@ -26,7 +28,16 @@ from utils.datetime_utils import format_display_datetime
 class LocalAuthRepository:
     def __init__(self, db_path):
         self.db_path = db_path
-        init_local_db(db_path)
+        self._initialized = False
+
+    def _ensure_initialized(self):
+        if self._initialized:
+            return
+        status = get_db_status(refresh=True)
+        if not status["ok"]:
+            raise DBConnectionError(status["error"] or "Sem conexao com o banco.")
+        init_local_db(self.db_path)
+        self._initialized = True
 
     def _normalize_chart_flags(self, chart_flags=None):
         flags = chart_flags or {}
@@ -104,12 +115,21 @@ class LocalAuthRepository:
         return self._normalize_chamados_filter_ids([row[0] for row in rows], profile=profile)
 
     def count_users(self):
-        conn = get_local_connection(self.db_path)
-        cur = conn.cursor()
-        cur.execute(f"SELECT COUNT(*) FROM {TABLE_USERS}")
-        row = cur.fetchone()
-        conn.close()
-        return int(row[0] or 0)
+        try:
+            self._ensure_initialized()
+        except DBConnectionError:
+            return 0
+        try:
+            conn = get_local_connection(self.db_path)
+            cur = conn.cursor()
+            cur.execute(f"SELECT COUNT(*) FROM {TABLE_USERS}")
+            row = cur.fetchone()
+            conn.close()
+            return int(row[0] or 0)
+        except DBConnectionError:
+            raise
+        except Exception as e:
+            raise DBConnectionError(str(e))
 
     def list_users(self):
         conn = get_local_connection(self.db_path)
@@ -616,13 +636,22 @@ class LocalAuthRepository:
         return user_id
 
     def authenticate(self, username, password):
-        user = self.get_user_by_username(username)
-        if not user or not user.get("is_active"):
+        try:
+            self._ensure_initialized()
+        except DBConnectionError:
             return None
-        if not check_password_hash(user["password_hash"], password or ""):
-            return None
-        self.touch_last_login(user["id"])
-        return self.get_user_with_subjects(user["id"])
+        try:
+            user = self.get_user_by_username(username)
+            if not user or not user.get("is_active"):
+                return None
+            if not check_password_hash(user["password_hash"], password or ""):
+                return None
+            self.touch_last_login(user["id"])
+            return self.get_user_with_subjects(user["id"])
+        except DBConnectionError:
+            raise
+        except Exception as e:
+            raise DBConnectionError(str(e))
 
     def get_user_with_subjects(self, user_id):
         conn = get_local_connection(self.db_path)

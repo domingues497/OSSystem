@@ -1,4 +1,5 @@
 import os
+import time
 import psycopg2
 
 LOCAL_SCHEMA = os.getenv("LOCAL_DB_SCHEMA", "capalti")
@@ -15,18 +16,71 @@ TABLE_USER_KANBAN_STATUSES = f"{LOCAL_SCHEMA}.chamados_user_kanban_statuses"
 TABLE_USER_KANBAN_COLUMN_ORDERS = f"{LOCAL_SCHEMA}.chamados_user_kanban_column_orders"
 TABLE_USER_CHAMADOS_FILTERS = f"{LOCAL_SCHEMA}.chamados_user_chamados_filters"
 
+
+_CONN_CACHE = {"ok": False, "ts": 0, "error": None, "ttl_seconds": 15}
+
+
+class DBConnectionError(Exception):
+    pass
+
+
+def _get_conn_params():
+    return {
+        "dbname": os.getenv("ERP_DB_NAME"),
+        "user": os.getenv("ERP_DB_USER"),
+        "password": os.getenv("ERP_DB_PASS"),
+        "host": os.getenv("ERP_DB_HOST"),
+        "port": os.getenv("ERP_DB_PORT"),
+    }
+
+
+def get_db_status(refresh=False):
+    now = time.time()
+    cache = _CONN_CACHE
+    if refresh or (now - cache["ts"]) > cache["ttl_seconds"]:
+        try:
+            params = _get_conn_params()
+            if not params["host"]:
+                raise DBConnectionError("Host do banco nao configurado (ERP_DB_HOST vazio).")
+            conn = psycopg2.connect(**params, connect_timeout=3)
+            cur = conn.cursor()
+            cur.execute("SELECT 1")
+            cur.close()
+            conn.close()
+            cache["ok"] = True
+            cache["error"] = None
+        except Exception as e:
+            cache["ok"] = False
+            cache["error"] = str(e)
+        cache["ts"] = now
+    return {
+        "ok": cache["ok"],
+        "error": cache["error"],
+        "host": os.getenv("ERP_DB_HOST"),
+        "port": os.getenv("ERP_DB_PORT"),
+        "db_name": os.getenv("ERP_DB_NAME"),
+        "user": os.getenv("ERP_DB_USER"),
+    }
+
+
+def check_db_connection():
+    return get_db_status(refresh=True)["ok"]
+
+
 def get_local_connection(_db_config=None):
-    return psycopg2.connect(
-        dbname=os.getenv("ERP_DB_NAME"),
-        user=os.getenv("ERP_DB_USER"),
-        password=os.getenv("ERP_DB_PASS"),
-        host=os.getenv("ERP_DB_HOST"),
-        port=os.getenv("ERP_DB_PORT")
-    )
+    params = _get_conn_params()
+    try:
+        return psycopg2.connect(**params, connect_timeout=5)
+    except Exception as e:
+        raise DBConnectionError(f"Falha na conexao com o banco: {e}")
+
 
 def init_local_db(schema_name=None):
     schema = schema_name or LOCAL_SCHEMA
-    conn = get_local_connection(schema)
+    try:
+        conn = get_local_connection(schema)
+    except DBConnectionError:
+        return False
     cur = conn.cursor()
     cur.execute(
         "SELECT 1 FROM information_schema.schemata WHERE schema_name = %s LIMIT 1",
@@ -139,3 +193,4 @@ def init_local_db(schema_name=None):
     """)
     conn.commit()
     conn.close()
+    return True

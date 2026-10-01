@@ -28,3 +28,9 @@ rtf_generator/generated/
 .tmp_doc/
 .tmp_doc.zip
 *.7z
+
+iniciarserver.txt
+instrucoes_inicio.txt
+rtf_generator/instrucoes_inicio.txt
+
+*.txt

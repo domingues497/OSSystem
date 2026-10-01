@@ -1,10 +1,8 @@
-PS D:\trabalhos faculdaded\OSSystem> cd .\rtf_generator\            
+cd c:\Projetos\OSSystem\rtf_generator
 .\venv\Scripts\python.exe app.py
 
-PS D:\trabalhos faculdaded\OSSystem> cd .\backend\
+cd c:\Projetos\OSSystem\backend
 .\venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000
-py manage.py runserver 0.0.0.0:8000 
 
 - Front-end / Dashboard (Flask): http://127.0.0.1:5000
-
 - Backend Principal (Django): http://127.0.0.1:8000
