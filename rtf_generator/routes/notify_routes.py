@@ -23,82 +23,65 @@ def _build_daily_productivity_block(day_date=None, max_tecnicos=50):
     except Exception:
         return ""
 
-    if not raw:
+    by_tec = {}
+    seen_unique_ticket = set()
+    unknown_key = svc._unknown if hasattr(svc, "_unknown") else "NÃO IDENTIFICADO"
+    for ev in eventos:
+        tipo = ev.get("tipo")
+        cod = ev.get("cod_solicitacao")
+        texto = ev.get("texto") or ""
+        tecnico_raw = svc._extract_tecnico(tipo, texto) if hasattr(svc, "_extract_tecnico") else "---"
+        tecnico_raw = tecnico_raw or "---"
+        tecnico = svc._normalize_tecnico_alias(tecnico_raw) if hasattr(svc, "_normalize_tecnico_alias") else tecnico_raw
+
+        if tipo in {"enviado", "andamento"} and cod is not None:
+            key = (tipo, cod)
+            if key in seen_unique_ticket:
+                continue
+            seen_unique_ticket.add(key)
+        if tecnico not in by_tec:
+            by_tec[tecnico] = {"enviados": 0, "andamento": 0, "finalizados": 0, "encerrados": 0}
+        if tipo == "enviado":
+            by_tec[tecnico]["enviados"] += 1
+        elif tipo == "andamento":
+            by_tec[tecnico]["andamento"] += 1
+        elif tipo == "finalizado":
+            by_tec[tecnico]["finalizados"] += 1
+        elif tipo == "encerrado":
+            by_tec[tecnico]["encerrados"] += 1
+
+    if not by_tec:
         return ""
 
-    unknown_label = "NÃO IDENTIFICADO"
-    by_tech = {}
+    ranked = []
+    for tec, v in by_tec.items():
+        total = (v.get("andamento") or 0) + (v.get("finalizados") or 0) + (v.get("encerrados") or 0)
+        enviados = v.get("enviados") or 0
+        ranked.append((tec, total, enviados, v.get("andamento") or 0, v.get("finalizados") or 0, v.get("encerrados") or 0))
+    ranked.sort(key=lambda x: (-x[1], -x[2], x[0]))
 
-    def _normalize(nome):
-        t = (nome or "").replace("\u00a0", " ").replace("\r", " ").replace("\n", " ")
-        t = " ".join(t.split()).strip()
-        t = t.replace("–", "-").replace("—", "-").replace("−", "-").replace("‐", "-")
-        t = t.strip().strip(".")
-        import re as _re
-        t = _re.sub(r"\s*-\s*", " - ", t)
-        if t.endswith(" TI") and not t.endswith(" - TI"):
-            t = t[:-3] + " - TI"
-        t = " ".join(t.split()).strip()
-        up = t.upper()
-        if not up or up in {"TI", "T.I", "T.I.", "- TI", "-TI", "T I", "T I.", "---"}:
-            return unknown_label
-        if up in {"RAFAEL - TI", "RAFAEL SIMAO - TI"} or ("SIMAO" in up and "RAFAEL" in up):
-            return "RAFAEL PRESTES SIMAO"
-        if "WECKERLIN" in up or _re.search(r"\bRAFAEL\s+W\b", up):
-            return "RAFAEL WECKERLIN"
-        return t
+    total_geral = sum(x[1] for x in ranked)
+    total_enviados_geral = sum(x[2] for x in ranked)
 
-    for day in (raw if isinstance(raw, list) else []):
-        tecnicos = day.get("tecnicos") if isinstance(day, dict) else None
-        if not isinstance(tecnicos, list):
-            continue
-        for t in tecnicos:
-            nome = _normalize(t.get("tecnico") or "---")
-            if nome not in by_tech:
-                by_tech[nome] = {"enviados": 0, "andamento": 0, "finalizados": 0, "encerrados": 0, "total": 0}
-            by_tech[nome]["enviados"] += int(t.get("enviados") or 0) or 0
-            by_tech[nome]["andamento"] += int(t.get("andamento") or 0) or 0
-            by_tech[nome]["finalizados"] += int(t.get("finalizados") or 0) or 0
-            by_tech[nome]["encerrados"] += int(t.get("encerrados") or 0) or 0
-            by_tech[nome]["total"] += int(t.get("total") or 0) or 0
-
-    rows = []
-    for nome, v in by_tech.items():
-        total = int(v.get("total") or 0)
-        env = int(v.get("enviados") or 0)
-        and_ = int(v.get("andamento") or 0)
-        fin = int(v.get("finalizados") or 0)
-        enc = int(v.get("encerrados") or 0)
-        if total <= 0 and env <= 0 and and_ <= 0 and fin <= 0:
-            continue
-        if nome == unknown_label:
-            continue
-        rows.append((nome, env, and_, fin, enc, total))
-
-    if not rows:
-        return ""
-
-    rows.sort(key=lambda x: (-x[5], -x[3], -x[2], x[0]))
-
-    total_env = sum(r[1] for r in rows)
-    total_and = sum(r[2] for r in rows)
-    total_fin = sum(r[3] for r in rows)
-    total_geral = sum(r[5] for r in rows)
-
-    d_label = day_date.strftime("%d/%m/%Y")
     lines = []
     lines.append("")
-    lines.append(f"Chamados por colaborador ({d_label})")
-    lines.append(f"Env: {total_env} | And: {total_and} | Fim: {total_fin} | Total: {total_geral}")
+    lines.append("Chamados por colaborador (hoje)")
+    lines.append(f"Total interações: {total_geral} | Criados: {total_enviados_geral}")
 
-    header = f"{'Colaborador':<26} {'Env':>4} {'And':>4} {'Fim':>4} {'Tot':>5}"
-    lines.append("")
-    lines.append(header)
-
-    show = rows[:max_tecnicos]
-    for nome, env, and_, fin, enc, total in show:
-        label = (nome[:24] + "..") if len(nome) > 26 else nome
-        lines.append(f"{label:<26} {env:>4} {and_:>4} {fin:>4} {total:>5}")
+    show = ranked[:max_tecnicos]
+    for tec, total, enviados, andamento, finalizados, encerrados in show:
+        label = tec if tec and tec != "---" else unknown_key
+        parts = []
+        if enviados:
+            parts.append(f"+{enviados}")
+        if andamento:
+            parts.append(f"and {andamento}")
+        if finalizados:
+            parts.append(f"fim {finalizados}")
+        if encerrados:
+            parts.append(f"enc {encerrados}")
+        detail = f" [{', '.join(parts)}]" if parts else ""
+        lines.append(f"- {label}: {total}{detail}")
 
     if len(rows) > max_tecnicos:
         lines.append(f"... +{len(rows) - max_tecnicos} colaboradores")
