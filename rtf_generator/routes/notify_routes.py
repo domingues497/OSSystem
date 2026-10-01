@@ -19,57 +19,68 @@ def _build_daily_productivity_block(day_date=None, max_tecnicos=50):
     try:
         erp_repo = ERPRepository()
         svc = ProdutividadeService(erp_repo)
-        raw = svc.obter_produtividade(start_date_str=iso, end_date_str=iso, access_scope=None)
+        results = svc.obter_produtividade(start_date_str=iso, end_date_str=iso, access_scope=None)
     except Exception:
         return ""
 
-    by_tec = {}
-    seen_unique_ticket = set()
     unknown_key = svc._unknown if hasattr(svc, "_unknown") else "NÃO IDENTIFICADO"
-    for ev in eventos:
-        tipo = ev.get("tipo")
-        cod = ev.get("cod_solicitacao")
-        texto = ev.get("texto") or ""
-        tecnico_raw = svc._extract_tecnico(tipo, texto) if hasattr(svc, "_extract_tecnico") else "---"
-        tecnico_raw = tecnico_raw or "---"
-        tecnico = svc._normalize_tecnico_alias(tecnico_raw) if hasattr(svc, "_normalize_tecnico_alias") else tecnico_raw
-
-        if tipo in {"enviado", "andamento"} and cod is not None:
-            key = (tipo, cod)
-            if key in seen_unique_ticket:
-                continue
-            seen_unique_ticket.add(key)
-        if tecnico not in by_tec:
-            by_tec[tecnico] = {"enviados": 0, "andamento": 0, "finalizados": 0, "encerrados": 0}
-        if tipo == "enviado":
-            by_tec[tecnico]["enviados"] += 1
-        elif tipo == "andamento":
-            by_tec[tecnico]["andamento"] += 1
-        elif tipo == "finalizado":
-            by_tec[tecnico]["finalizados"] += 1
-        elif tipo == "encerrado":
-            by_tec[tecnico]["encerrados"] += 1
+    by_tec = {}
+    for day in (results or []):
+        for t in (day.get("tecnicos") or []):
+            nome = (t.get("tecnico") or "---").strip() or "---"
+            enviados = int(t.get("enviados") or 0)
+            andamento = int(t.get("andamento") or 0)
+            finalizados = int(t.get("finalizados") or 0)
+            encerrados = int(t.get("encerrados") or 0)
+            total = int(t.get("total") or 0) or (andamento + finalizados)
+            atendidos = total
+            if nome not in by_tec:
+                by_tec[nome] = {
+                    "enviados": 0,
+                    "andamento": 0,
+                    "finalizados": 0,
+                    "encerrados": 0,
+                    "total": 0,
+                    "atendidos": 0,
+                }
+            by_tec[nome]["enviados"] += enviados
+            by_tec[nome]["andamento"] += andamento
+            by_tec[nome]["finalizados"] += finalizados
+            by_tec[nome]["encerrados"] += encerrados
+            by_tec[nome]["total"] += total
+            by_tec[nome]["atendidos"] += atendidos
 
     if not by_tec:
         return ""
 
     ranked = []
     for tec, v in by_tec.items():
-        total = (v.get("andamento") or 0) + (v.get("finalizados") or 0) + (v.get("encerrados") or 0)
-        enviados = v.get("enviados") or 0
-        ranked.append((tec, total, enviados, v.get("andamento") or 0, v.get("finalizados") or 0, v.get("encerrados") or 0))
+        ranked.append((
+            tec,
+            int(v["atendidos"]),
+            int(v["enviados"]),
+            int(v["andamento"]),
+            int(v["finalizados"]),
+            int(v["encerrados"]),
+            int(v["total"]),
+        ))
     ranked.sort(key=lambda x: (-x[1], -x[2], x[0]))
 
-    total_geral = sum(x[1] for x in ranked)
-    total_enviados_geral = sum(x[2] for x in ranked)
+    total_atendidos = sum(x[1] for x in ranked)
+    total_enviados = sum(x[2] for x in ranked)
+    total_andamento = sum(x[3] for x in ranked)
+    total_finalizados = sum(x[4] for x in ranked)
+    total_encerrados = sum(x[5] for x in ranked)
 
     lines = []
     lines.append("")
-    lines.append("Chamados por colaborador (hoje)")
-    lines.append(f"Total interações: {total_geral} | Criados: {total_enviados_geral}")
+    lines.append(f"Chamados por colaborador (hoje - {iso})")
+    lines.append(
+        f"Atendidos: {total_atendidos} | Em Andamento: {total_andamento} | Finalizados: {total_finalizados} | Encerrados: {total_encerrados} | Criados: {total_enviados}"
+    )
 
     show = ranked[:max_tecnicos]
-    for tec, total, enviados, andamento, finalizados, encerrados in show:
+    for tec, atendidos, enviados, andamento, finalizados, encerrados, _total in show:
         label = tec if tec and tec != "---" else unknown_key
         parts = []
         if enviados:
@@ -81,10 +92,10 @@ def _build_daily_productivity_block(day_date=None, max_tecnicos=50):
         if encerrados:
             parts.append(f"enc {encerrados}")
         detail = f" [{', '.join(parts)}]" if parts else ""
-        lines.append(f"- {label}: {total}{detail}")
+        lines.append(f"- {label}: {atendidos}{detail}")
 
-    if len(rows) > max_tecnicos:
-        lines.append(f"... +{len(rows) - max_tecnicos} colaboradores")
+    if len(ranked) > max_tecnicos:
+        lines.append(f"... +{len(ranked) - max_tecnicos} colaboradores")
 
     return "\n".join(lines)
 
